@@ -1,0 +1,29 @@
+preprocessing:
+  num_raw_files: 1
+  raw_filenames_pattern: "combined_data_{}.txt"
+  min_rating: 1
+  max_rating: 5
+  min_movie_ratings: 50
+  min_user_ratings: 10
+
+model:
+  test_size: 0.2
+  data_sample_fraction: 0.005  # Between 0 and 1
+  top_n: 10
+  threshold: 4.0 # Threshold defines the minimum predicted rating to consider a recommendation relevant for precision and recall calculation.
+  n_trials: 3
+
+model_features:
+  user: customer_id
+  item: movie_id
+  rating: rating
+
+svd_hyperparams:
+  n_factors_min: 20
+  n_factors_max: 100
+  n_epochs_min: 5
+  n_epochs_max: 50
+  lr_all_min: 0.0001
+  lr_all_max: 0.1
+  reg_all_min: 0.0001
+  reg_all_max: 0.1
