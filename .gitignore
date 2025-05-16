@@ -31,3 +31,6 @@ artifacts/
 
 # VSCode settings (optional)
 .vscode/
+
+mlruns/*/
+!mlruns/.gitkeep  # si quieres mantener la carpeta vacía en el repo
