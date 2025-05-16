@@ -27,7 +27,7 @@ models/
 artifacts/
 
 # Optional: Keep README or important files in data folder (uncomment if needed)
-# !data/README.md
+!data/README.md
 
 # VSCode settings (optional)
 .vscode/
