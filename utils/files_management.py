@@ -1,7 +1,10 @@
 from pathlib import Path
 import pandas as pd
 
-def fix_csv_with_commas_in_text(input_path: Path, output_path: Path) -> None:
+def fix_csv_with_commas_in_text(
+    input_path: Path, 
+    output_path: Path
+    ) -> None:
     """
     Fixes a malformed CSV file where fields are separated by commas,
     but the third field (typically a text column) may contain commas itself.
@@ -38,7 +41,11 @@ def fix_csv_with_commas_in_text(input_path: Path, output_path: Path) -> None:
             outfile.write(new_line + '\n')
 
 
-def load_netflix_data(file_path: str, save_path: str = None, verbose: bool = True) -> pd.DataFrame:
+def load_netflix_data(
+    file_path: str, 
+    save_path: str = None, 
+    verbose: bool = True
+    ) -> pd.DataFrame:
     """
     Load Netflix Prize data from raw text format into a cleaned DataFrame.
 
@@ -82,7 +89,11 @@ def load_netflix_data(file_path: str, save_path: str = None, verbose: bool = Tru
     return df
 
 
-def load_multiple_netflix_files(file_paths: list[str], save_path: str = None, verbose: bool = True) -> pd.DataFrame:
+def load_multiple_netflix_files(
+    file_paths: list[str], 
+    save_path: str = None, 
+    verbose: bool = True
+    ) -> pd.DataFrame:
     """
     Load and merge multiple Netflix data files into one DataFrame.
 

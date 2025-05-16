@@ -34,7 +34,6 @@ def filter_sparse_users_and_movies(
     return df[mask]
 
 
-
 def filter_valid_ratings(
     df: pd.DataFrame,
     min_rating: int =1, 
@@ -50,3 +49,23 @@ def filter_valid_ratings(
         pd.DataFrame: Filtered DataFrame.
     """
     return df[df['rating'].between(min_rating, max_rating)]
+
+
+def convert_columns_to_string(
+    df: pd.DataFrame, 
+    columns: list[str]
+    ) -> pd.DataFrame:
+    """
+    Convert specified columns of a DataFrame to string dtype using NumPy only if they are not already strings.
+
+    Parameters:
+        df (pd.DataFrame): The input DataFrame.
+        columns (list of str): List of column names to convert.
+
+    Returns:
+        pd.DataFrame: DataFrame with specified columns converted to string dtype if needed.
+    """
+    for col in columns:
+        if df[col].dtype != 'string':
+            df[col] = np.array(df[col], dtype=str)
+    return df

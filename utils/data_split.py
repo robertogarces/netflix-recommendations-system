@@ -1,6 +1,10 @@
 import numpy as np
 
-def temporal_train_test_split(df, date_col="date", test_size=0.2):
+def temporal_train_test_split(
+    df: pd.DataFrame, 
+    date_col: str ="date", 
+    test_size: float =0.2
+    ):
     dates = df[date_col].values
     sorted_indices = np.argsort(dates)
     split_idx = int(len(dates) * (1 - test_size))
