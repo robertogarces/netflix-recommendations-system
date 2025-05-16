@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 
 def temporal_train_test_split(
     df: pd.DataFrame, 
