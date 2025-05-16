@@ -1,0 +1,33 @@
+# macOS system files
+**/.DS_Store
+
+# Python cache and bytecode files
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environments
+.venv/
+env/
+venv/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Environment variables files
+.env
+*.env
+
+# Logs
+*.log
+
+# Ignore data, models, and artifacts directories since they are tracked by DVC
+data/
+models/
+artifacts/
+
+# Optional: Keep README or important files in data folder (uncomment if needed)
+# !data/README.md
+
+# VSCode settings (optional)
+.vscode/
