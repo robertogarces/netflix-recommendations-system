@@ -8,41 +8,44 @@ This repository contains a modular and reproducible machine learning pipeline bu
 
 ```
 .
-├── artifacts/            
-│   ├── valid_movies.pkl
-│   └── valid_users.pkl
-├── config/               
-│   ├── best_params.yaml
-│   ├── paths.py
-│   └── settings.yaml
-├── data/               
-│   ├── final/
-│   ├── processed/
-│   └── raw/
-├── mlruns/               
-├── models/             
-│   └── svd_model.pkl
-├── notebooks/               
+├── artifacts/            # Output directory for processed data artifacts (e.g., valid users/movies lists)
+│   ├── valid_movies.pkl  
+│   └── valid_users.pkl   
+├── config/               # Configuration files and settings for the project
+│   ├── best_params.yaml  
+│   ├── paths.py          
+│   └── settings.yaml     
+├── data/                 # Raw, processed, and final datasets
+│   ├── final/            
+│   ├── processed/        
+│   └── raw/              
+├── mlruns/               # MLflow tracking directory for experiment logs and metrics
+├── models/               # Saved trained models
+│   └── svd_model.pkl     
+├── notebooks/            # Jupyter notebooks for EDA, modeling, prediction, and preprocessing
 │   ├── eda.ipynb
 │   ├── model.ipynb
-│   └── predict.ipynb
+│   ├── predict.ipynb
 │   └── preprocessing.ipynb
-├── src/                
+├── src/                  # Source code: main scripts for preprocessing, training, and prediction
 │   ├── preprocessing.py
 │   ├── training.py
 │   └── predictions.py
-├── utils/              
+├── utils/                # Utility modules for config, data handling, splitting, file ops, and metrics
 │   ├── __init__.py
 │   ├── config_loader.py
 │   ├── data_processing.py
 │   ├── data_split.py
 │   ├── files_management.py
 │   └── metrics.py
-├── dvc.yaml            
-├── Dockerfile          
-├── requirements.txt    
-└── environment.yaml    
+├── dvc.yaml              # DVC pipeline definition for reproducible data versioning and pipeline stages
+├── Dockerfile            # Dockerfile to build containerized environment with dependencies and DVC setup
+├── requirements.txt      # Python pip dependencies
+└── environment.yaml      # Conda environment file (used for local development and Docker image)
+
 ```
+
+
 
 ---
 
