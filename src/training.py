@@ -6,6 +6,7 @@ import mlflow
 import mlflow.sklearn
 from surprise import Dataset, Reader, SVD, accuracy
 import pickle
+import yaml
 from pathlib import Path
 
 sys.path.append('../')
@@ -69,26 +70,46 @@ def main():
     mlflow.set_experiment("Netflix_SVD_Optimization")
 
     with mlflow.start_run(run_name="SVD-Optuna-Tuning"):
-        logger.info("Starting hyperparameter optimization with Optuna")
-        study = optuna.create_study(direction='minimize')
-        study.optimize(lambda trial: objective(trial, trainset, testset, svd_hyperparams),
-                       n_trials=model_cfg['n_trials'])
+        if model_cfg.get("optimize", False):
+            logger.info("Starting hyperparameter optimization with Optuna")
+            study = optuna.create_study(direction='minimize')
+            study.optimize(lambda trial: objective(trial, trainset, testset, svd_hyperparams),
+                           n_trials=model_cfg['n_trials'])
 
-        logger.info(f"Best RMSE: {study.best_value:.4f}")
-        logger.info(f"Best params: {study.best_params}")
+            best_params = study.best_params
+            logger.info(f"Best RMSE: {study.best_value:.4f}")
+            logger.info(f"Best params: {best_params}")
 
-        mlflow.log_params(study.best_params)
-        mlflow.log_metric("best_rmse", study.best_value)
+            mlflow.log_params(best_params)
+            mlflow.log_metric("best_rmse", study.best_value)
+
+            # Save best parameters to YAML
+            with open(CONFIG_PATH / "best_params.yaml", "w") as f:
+                yaml.dump(best_params, f)
+                logger.info("Best parameters saved to best_params.yaml")
+        else:
+            try:
+                with open(CONFIG_PATH / "best_params.yaml") as f:
+                    best_params = yaml.safe_load(f)
+                    logger.info("Loaded best parameters from best_params.yaml")
+            except FileNotFoundError:
+                logger.warning("Best parameters file not found. Using default parameters.")
+                best_params = {
+                    'n_factors': 100,
+                    'n_epochs': 20,
+                    'lr_all': 0.005,
+                    'reg_all': 0.02
+                }
 
         # Train and evaluate final model
-        logger.info(f"Training SVD Model")
-        final_model = SVD(**study.best_params)
+        logger.info(f"Training SVD Model with best parameters")
+        final_model = SVD(**best_params)
         final_model.fit(trainset)
         predictions = final_model.test(testset)
         rmse = accuracy.rmse(predictions, verbose=False)
         mlflow.log_metric("final_rmse", rmse)
 
-        # Precision/recall
+        # Precision/Recall
         top_n = get_top_n(predictions, n=model_cfg['top_n'])
         precision, recall = precision_recall_at_k(predictions, k=model_cfg['top_n'], threshold=model_cfg['threshold'])
 
