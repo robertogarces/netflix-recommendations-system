@@ -2,37 +2,31 @@ import pandas as pd
 import numpy as np
 
 def filter_sparse_users_and_movies(
-    df: pd.DataFrame, 
-    min_movie_ratings: int = 50, 
+    df: pd.DataFrame,
+    min_movie_ratings: int = 50,
     min_user_ratings: int = 10
-    ) -> pd.DataFrame:
+) -> pd.DataFrame:
     """
     Filters out movies and users with very few ratings to reduce noise.
 
-    Parameters:
-        df (pd.DataFrame): The original ratings DataFrame. Must contain 'movie_id' and 'customer_id' columns.
-        min_movie_ratings (int): Minimum number of ratings required for a movie to be kept.
-        min_user_ratings (int): Minimum number of ratings required for a user to be kept.
-
     Returns:
-        pd.DataFrame: Filtered DataFrame with less sparse movies and users.
+        pd.DataFrame: Filtered DataFrame.
     """
-    # Convert columns to NumPy arrays for faster processing
-    movie_ids = df['movie_id'].values
-    user_ids = df['customer_id'].values
+    # Count movie ratings
+    movie_counts = df['movie_id'].value_counts()
+    valid_movies = movie_counts.index[movie_counts >= min_movie_ratings]
 
-    # Get counts using NumPy (faster than pandas.value_counts)
-    movie_unique, movie_counts = np.unique(movie_ids, return_counts=True)
-    user_unique, user_counts = np.unique(user_ids, return_counts=True)
+    # Filter once by movies
+    df = df[df['movie_id'].isin(valid_movies)]
 
-    # Create sets of allowed IDs for fast lookup
-    valid_movies = set(movie_unique[movie_counts >= min_movie_ratings])
-    valid_users = set(user_unique[user_counts >= min_user_ratings])
+    # Count user ratings on the filtered set
+    user_counts = df['customer_id'].value_counts()
+    valid_users = user_counts.index[user_counts >= min_user_ratings]
 
-    # Use NumPy boolean indexing
-    mask = np.isin(movie_ids, list(valid_movies)) & np.isin(user_ids, list(valid_users))
-    return df[mask]
+    # Final filter by users
+    df = df[df['customer_id'].isin(valid_users)]
 
+    return df
 
 def filter_valid_ratings(
     df: pd.DataFrame,
@@ -40,7 +34,7 @@ def filter_valid_ratings(
     max_rating: int =5
     ) -> pd.DataFrame:
     """
-    Quickly filter a DataFrame to keep only rows where 'rating' is between 1 and 5 inclusive.
+    Filter a DataFrame to keep only rows where 'rating' is between a min and a max rating (inclusive).
 
     Parameters:
         df (pd.DataFrame): Input DataFrame with a 'rating' column.

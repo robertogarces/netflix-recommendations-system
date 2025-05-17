@@ -38,11 +38,11 @@ def preprocess_ratings_data(df: pd.DataFrame) -> pd.DataFrame:
     logger.info(f"Filtering valid ratings ({preproc_cfg['min_rating']}-{preproc_cfg['max_rating']})...")
     df = filter_valid_ratings(df, min_rating=preproc_cfg["min_rating"], max_rating=preproc_cfg["max_rating"])
     logger.info("Filtering sparse users and movies...")
-  #  df = filter_sparse_users_and_movies(
-  #      df,
-  #      min_movie_ratings=preproc_cfg["min_movie_ratings"],
-  #      min_user_ratings=preproc_cfg["min_user_ratings"]
-  #  )
+    df = filter_sparse_users_and_movies(
+        df,
+        min_movie_ratings=preproc_cfg["min_movie_ratings"],
+        min_user_ratings=preproc_cfg["min_user_ratings"]
+    )
     return df
 
 def main():
