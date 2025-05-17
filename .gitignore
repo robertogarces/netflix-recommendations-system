@@ -22,9 +22,12 @@ venv/
 *.log
 
 # Ignore data, models, and artifacts directories since they are tracked by DVC
-data/
-models/
-artifacts/
+data/*
+!data/.gitkeep
+models/*
+!models/.gitkeep
+artifacts/*
+!artifacts/.gitkeep
 
 # Optional: Keep README or important files in data folder (uncomment if needed)
 !data/README.md
