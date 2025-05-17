@@ -8,17 +8,40 @@ This repository contains a modular and reproducible machine learning pipeline bu
 
 ```
 .
-├── data/               # Raw and processed input data
-├── models/             # Saved trained models
-├── artifacts/          # Intermediate pipeline outputs
-├── src/                # Python scripts for each stage
+├── artifacts/            
+│   ├── valid_movies.pkl
+│   └── valid_users.pkl
+├── config/               
+│   ├── best_params.yaml
+│   ├── paths.py
+│   └── settings.yaml
+├── data/               
+│   ├── final/
+│   ├── processed/
+│   └── raw/
+├── mlruns/               
+├── models/             
+│   └── svd_model.pkl
+├── notebooks/               
+│   ├── eda.ipynb
+│   ├── model.ipynb
+│   └── predict.ipynb
+│   └── preprocessing.ipynb
+├── src/                
 │   ├── preprocessing.py
 │   ├── training.py
 │   └── predictions.py
-├── dvc.yaml            # DVC pipeline definition
-├── Dockerfile          # Docker image definition
-├── requirements.txt    # Python dependencies
-└── environment.yaml    # Conda environment (optional)
+├── utils/              
+│   ├── __init__.py
+│   ├── config_loader.py
+│   ├── data_processing.py
+│   ├── data_split.py
+│   ├── files_management.py
+│   └── metrics.py
+├── dvc.yaml            
+├── Dockerfile          
+├── requirements.txt    
+└── environment.yaml    
 ```
 
 ---
