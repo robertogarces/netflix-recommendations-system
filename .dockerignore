@@ -1,0 +1,11 @@
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+*.git
+data/raw
+data/processed
+models
+artifacts
+.env
+venv
