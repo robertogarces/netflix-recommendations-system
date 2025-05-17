@@ -51,7 +51,7 @@ def main():
     with open(ARTIFACTS_PATH / "valid_movies.pkl", "rb") as f:
         valid_movies = pickle.load(f)
 
-    # Filter out unknown users/movies
+    # Filter out the users/movies that were removed at the preprocessing step
     df = filter_unseen(df, valid_users=valid_users, valid_movies=valid_movies)
 
     # Load trained model
@@ -88,9 +88,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-
-
-
 
