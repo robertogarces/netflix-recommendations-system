@@ -9,8 +9,8 @@ stages:
       size: 487
     - path: config/settings.yaml
       hash: md5
-      md5: fbf8d3b005ee1b84891209087fdd42b6
-      size: 684
+      md5: 2636a6faf9a4cb3ec7203772ed41323b
+      size: 685
     - path: data/raw
       hash: md5
       md5: 2697c9d6e3006dd2872ac4618b68ca9a.dir
@@ -35,11 +35,11 @@ stages:
     outs:
     - path: artifacts/valid_movies.pkl
       hash: md5
-      md5: d9655d1cb19b8855d9026f11aa0b4e81
+      md5: d042acafee63a826f0b0985616b1c421
       size: 130688
     - path: artifacts/valid_users.pkl
       hash: md5
-      md5: 9b4725fe26b42852c4cc57b93b5498ac
+      md5: 8fd8c5fe14e5833a698b761f3e376eca
       size: 4444262
     - path: data/processed/processed_data.parquet
       hash: md5
@@ -58,16 +58,16 @@ stages:
       size: 487
     - path: config/settings.yaml
       hash: md5
-      md5: fbf8d3b005ee1b84891209087fdd42b6
-      size: 684
+      md5: 2636a6faf9a4cb3ec7203772ed41323b
+      size: 685
     - path: data/processed/processed_data.parquet
       hash: md5
       md5: 0a80eecfd66a060d49d184126f62cb03
       size: 1280135175
     - path: src/training.py
       hash: md5
-      md5: cc0002628ea2f8e76be8215f94d2d63b
-      size: 5304
+      md5: 04960b3cc876d82b4499ee41cbe84b7e
+      size: 6071
     - path: utils/config_loader.py
       hash: md5
       md5: 11c0967c9b586b99d2f2abd60cc3f22e
@@ -83,18 +83,18 @@ stages:
     outs:
     - path: models/svd_model.pkl
       hash: md5
-      md5: 87dc1c61004a162ef79c1f22e7607513
-      size: 486251570
+      md5: 86c9bbe1f1e32bb541995a2d19ed5b92
+      size: 845474615
   predict:
     cmd: python -m src.predictions
     deps:
     - path: artifacts/valid_movies.pkl
       hash: md5
-      md5: d9655d1cb19b8855d9026f11aa0b4e81
+      md5: d042acafee63a826f0b0985616b1c421
       size: 130688
     - path: artifacts/valid_users.pkl
       hash: md5
-      md5: 9b4725fe26b42852c4cc57b93b5498ac
+      md5: 8fd8c5fe14e5833a698b761f3e376eca
       size: 4444262
     - path: config/paths.py
       hash: md5
@@ -110,12 +110,12 @@ stages:
       size: 52452386
     - path: models/svd_model.pkl
       hash: md5
-      md5: 87dc1c61004a162ef79c1f22e7607513
-      size: 486251570
+      md5: 86c9bbe1f1e32bb541995a2d19ed5b92
+      size: 845474615
     - path: src/predictions.py
       hash: md5
-      md5: 81bde13cc27916b43c31f94b3e8cda1c
-      size: 2946
+      md5: f1b0ca2873e13677b89e009485d56842
+      size: 2981
     - path: utils/data_processing.py
       hash: md5
       md5: 116d8cd10b431f7119f9de3f419560c3
@@ -127,5 +127,5 @@ stages:
     outs:
     - path: data/final/predictions.csv
       hash: md5
-      md5: 5af65f7984fca27736cc59ff2e79c91b
-      size: 201574838
+      md5: f696c5ed2b39526a672f20489683b131
+      size: 201457219
