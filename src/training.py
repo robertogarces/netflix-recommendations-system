@@ -107,6 +107,7 @@ def main():
         final_model.fit(trainset)
         predictions = final_model.test(testset)
         rmse = accuracy.rmse(predictions, verbose=False)
+        logger.info(f"RMSE: {rmse:.4f}")
         mlflow.log_metric("final_rmse", rmse)
 
         # Precision/Recall
