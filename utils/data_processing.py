@@ -1,32 +1,50 @@
 import pandas as pd
 import numpy as np
 
+import pickle
+from pathlib import Path
+
 def filter_sparse_users_and_movies(
     df: pd.DataFrame,
     min_movie_ratings: int = 50,
-    min_user_ratings: int = 10
+    min_user_ratings: int = 10,
+    save_dir: str = "artifacts"
 ) -> pd.DataFrame:
     """
-    Filters out movies and users with very few ratings to reduce noise.
+    Filters out movies and users with very few ratings to reduce noise,
+    and saves valid movie and user IDs.
+
+    Parameters:
+        df (pd.DataFrame): Input dataframe.
+        min_movie_ratings (int): Minimum ratings a movie must have to be kept.
+        min_user_ratings (int): Minimum ratings a user must have to be kept.
+        save_dir (str): Directory to save valid IDs.
 
     Returns:
         pd.DataFrame: Filtered DataFrame.
     """
-    # Count movie ratings
-    movie_counts = df['movie_id'].value_counts()
-    valid_movies = movie_counts.index[movie_counts >= min_movie_ratings]
+    save_path = Path(save_dir)
+    save_path.mkdir(parents=True, exist_ok=True)
 
-    # Filter once by movies
+    # Filter movies
+    movie_counts = df['movie_id'].value_counts()
+    valid_movies = set(movie_counts[movie_counts >= min_movie_ratings].index)
     df = df[df['movie_id'].isin(valid_movies)]
 
-    # Count user ratings on the filtered set
+    # Filter users
     user_counts = df['customer_id'].value_counts()
-    valid_users = user_counts.index[user_counts >= min_user_ratings]
-
-    # Final filter by users
+    valid_users = set(user_counts[user_counts >= min_user_ratings].index)
     df = df[df['customer_id'].isin(valid_users)]
 
+    # Save valid sets
+    with open(save_path / "valid_movies.pkl", "wb") as f:
+        pickle.dump(valid_movies, f)
+
+    with open(save_path / "valid_users.pkl", "wb") as f:
+        pickle.dump(valid_users, f)
+
     return df
+
 
 def filter_valid_ratings(
     df: pd.DataFrame,
@@ -63,3 +81,15 @@ def convert_columns_to_string(
         if df[col].dtype != 'string':
             df[col] = np.array(df[col], dtype=str)
     return df
+
+
+def filter_unseen(df, valid_users, valid_movies):
+    mask_users = df["customer_id"].isin(valid_users)
+    mask_movies = df["movie_id"].isin(valid_movies)
+    filtered_df = df[mask_users & mask_movies].copy()
+
+    dropped = len(df) - len(filtered_df)
+    if dropped > 0:
+        print(f"[INFO] Dropped {dropped} rows with unknown users or movies.")
+
+    return filtered_df

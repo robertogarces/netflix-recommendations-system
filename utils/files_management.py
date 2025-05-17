@@ -44,19 +44,19 @@ def fix_csv_with_commas_in_text(
 
 def load_netflix_data(
     file_path: str, 
-    save_path: str = None, 
+    has_ratings: bool = True, 
     verbose: bool = True
-    ) -> pd.DataFrame:
+) -> pd.DataFrame:
     """
-    Load Netflix Prize data from raw text format into a cleaned DataFrame.
+    Load Netflix data from raw format into a cleaned DataFrame.
 
     Parameters:
         file_path (str): Path to the raw Netflix data file.
-        save_path (str, optional): If provided, saves the DataFrame to this path as a .parquet file.
+        has_ratings (bool): Whether the file includes ratings (training) or not (test).
         verbose (bool): If True, prints number of loaded rows and a sample.
 
     Returns:
-        pd.DataFrame: A DataFrame with columns [movie_id, customer_id, rating, date].
+        pd.DataFrame: A DataFrame with appropriate columns depending on `has_ratings`.
     """
     data = []
     current_movie_id = None
@@ -69,19 +69,32 @@ def load_netflix_data(
                 current_movie_id = int(line[:-1])
             else:
                 try:
-                    customer_id, rating, date = line.split(",")
-                    data.append((
-                        current_movie_id,
-                        int(customer_id),
-                        float(rating),
-                        date
-                    ))
+                    if has_ratings:
+                        customer_id, rating, date = line.split(",")
+                        data.append((
+                            current_movie_id,
+                            int(customer_id),
+                            float(rating),
+                            date
+                        ))
+                    else:
+                        customer_id, date = line.split(",")
+                        data.append((
+                            current_movie_id,
+                            int(customer_id),
+                            date
+                        ))
                 except ValueError:
                     continue
 
-    df = pd.DataFrame(data, columns=["movie_id", "customer_id", "rating", "date"])
-    df["date"] = pd.to_datetime(df["date"], errors="coerce")
-    df = df.dropna(subset=["date"])
+    if has_ratings:
+        df = pd.DataFrame(data, columns=["movie_id", "customer_id", "rating", "date"])
+        df["date"] = pd.to_datetime(df["date"], errors="coerce")
+        df = df.dropna(subset=["date"])
+    else:
+        df = pd.DataFrame(data, columns=["movie_id", "customer_id", "date"])
+        df["date"] = pd.to_datetime(df["date"], errors="coerce")
+        df = df.dropna(subset=["date"])
 
     if verbose:
         print(f"[INFO] Loaded {len(df):,} rows from {file_path}")
@@ -93,7 +106,8 @@ def load_netflix_data(
 def load_multiple_netflix_files(
     file_paths: list[str], 
     save_path: str = None, 
-    verbose: bool = True
+    verbose: bool = True,
+    has_ratings: bool = True
     ) -> pd.DataFrame:
     """
     Load and merge multiple Netflix data files into one DataFrame.
@@ -110,7 +124,7 @@ def load_multiple_netflix_files(
     for path in file_paths:
         if verbose:
             print(f"\n[INFO] Processing: {path}")
-        df = load_netflix_data(path, verbose=verbose)
+        df = load_netflix_data(path, verbose=verbose, has_ratings=has_ratings)
         dfs.append(df)
 
     merged_df = pd.concat(dfs, ignore_index=True)
