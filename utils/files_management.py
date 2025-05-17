@@ -1,5 +1,6 @@
 from pathlib import Path
 import pandas as pd
+import pickle
 
 def fix_csv_with_commas_in_text(
     input_path: Path, 
@@ -123,3 +124,9 @@ def load_multiple_netflix_files(
         print(f"\n[INFO] Total rows loaded: {len(merged_df):,}")
 
     return merged_df
+
+
+def load_model(path: Path):
+    with open(path, 'rb') as f:
+        model = pickle.load(f)
+    return model
