@@ -1,0 +1,131 @@
+schema: '2.0'
+stages:
+  preprocess:
+    cmd: python -m src.preprocessing
+    deps:
+    - path: config/paths.py
+      hash: md5
+      md5: 03611919621942b89b2356fa426fc38d
+      size: 487
+    - path: config/settings.yaml
+      hash: md5
+      md5: 02a83e5003f1e109b432b33d81ec537b
+      size: 684
+    - path: data/raw
+      hash: md5
+      md5: a09d0c0cf0367f91537534ab5bde7c44.dir
+      size: 2300042001
+      nfiles: 12
+    - path: src/preprocessing.py
+      hash: md5
+      md5: 346437c74773455826f52c66e8587495
+      size: 2473
+    - path: utils/config_loader.py
+      hash: md5
+      md5: 11c0967c9b586b99d2f2abd60cc3f22e
+      size: 211
+    - path: utils/data_processing.py
+      hash: md5
+      md5: 116d8cd10b431f7119f9de3f419560c3
+      size: 2809
+    - path: utils/files_management.py
+      hash: md5
+      md5: ac71a524363d9a9dd7e788966c667148
+      size: 4656
+    outs:
+    - path: artifacts/valid_movies.pkl
+      hash: md5
+      md5: 6baa790c4d26218ebb98321dae91720a
+      size: 30356
+    - path: artifacts/valid_users.pkl
+      hash: md5
+      md5: 9085c4eabf72c603dbdadd9c79c53d00
+      size: 3267223
+    - path: data/processed/processed_data.parquet
+      hash: md5
+      md5: 4845774a2a75059fcfcc31b03fd56c5a
+      size: 298702338
+  train:
+    cmd: python -m src.training
+    deps:
+    - path: config/best_params.yaml
+      hash: md5
+      md5: b65a2734ba4cd4b2938e62c60fff4213
+      size: 88
+    - path: config/paths.py
+      hash: md5
+      md5: 03611919621942b89b2356fa426fc38d
+      size: 487
+    - path: config/settings.yaml
+      hash: md5
+      md5: 02a83e5003f1e109b432b33d81ec537b
+      size: 684
+    - path: data/processed/processed_data.parquet
+      hash: md5
+      md5: 4845774a2a75059fcfcc31b03fd56c5a
+      size: 298702338
+    - path: src/training.py
+      hash: md5
+      md5: cc0002628ea2f8e76be8215f94d2d63b
+      size: 5304
+    - path: utils/config_loader.py
+      hash: md5
+      md5: 11c0967c9b586b99d2f2abd60cc3f22e
+      size: 211
+    - path: utils/data_split.py
+      hash: md5
+      md5: ddeb1242f7f66f91640a4b6ff44be88e
+      size: 387
+    - path: utils/metrics.py
+      hash: md5
+      md5: fa51eebb444dbb1131695aba78c0fa10
+      size: 2164
+    outs:
+    - path: models/svd_model.pkl
+      hash: md5
+      md5: e2dfb26886bc066417cf4e8de7d5a0ef
+      size: 228604661
+  predict:
+    cmd: python -m src.predictions
+    deps:
+    - path: artifacts/valid_movies.pkl
+      hash: md5
+      md5: 6baa790c4d26218ebb98321dae91720a
+      size: 30356
+    - path: artifacts/valid_users.pkl
+      hash: md5
+      md5: 9085c4eabf72c603dbdadd9c79c53d00
+      size: 3267223
+    - path: config/paths.py
+      hash: md5
+      md5: 03611919621942b89b2356fa426fc38d
+      size: 487
+    - path: data/raw/movie_titles_fixed.csv
+      hash: md5
+      md5: 457e476ab9f60c6b469111384dd5ba6a
+      size: 577547
+    - path: data/raw/qualifying.txt
+      hash: md5
+      md5: 88be8340ad7b3c31dfd7b6f87e7b9022
+      size: 52452386
+    - path: models/svd_model.pkl
+      hash: md5
+      md5: e2dfb26886bc066417cf4e8de7d5a0ef
+      size: 228604661
+    - path: src/predictions.py
+      hash: md5
+      md5: 81bde13cc27916b43c31f94b3e8cda1c
+      size: 2946
+    - path: utils/data_processing.py
+      hash: md5
+      md5: 116d8cd10b431f7119f9de3f419560c3
+      size: 2809
+    - path: utils/files_management.py
+      hash: md5
+      md5: ac71a524363d9a9dd7e788966c667148
+      size: 4656
+    outs:
+    - path: data/final/predictions.csv
+      hash: md5
+      md5: 45df7e42c6bf5d93aff02eca56d61688
+      size: 56702511

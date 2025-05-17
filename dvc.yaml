@@ -1,0 +1,44 @@
+stages:
+  preprocess:
+    cmd: python -m src.preprocessing
+    deps:
+      - src/preprocessing.py
+      - utils/files_management.py
+      - utils/data_processing.py
+      - utils/config_loader.py
+      - config/paths.py
+      - data/raw
+      - config/settings.yaml
+    outs:
+      - data/processed/processed_data.parquet
+      - artifacts/valid_users.pkl
+      - artifacts/valid_movies.pkl
+
+  train:
+    cmd: python -m src.training
+    deps:
+      - src/training.py
+      - utils/metrics.py
+      - utils/data_split.py
+      - utils/config_loader.py
+      - config/paths.py
+      - config/settings.yaml
+      - config/best_params.yaml
+      - data/processed/processed_data.parquet
+    outs:
+      - models/svd_model.pkl
+
+  predict:
+    cmd: python -m src.predictions
+    deps:
+      - src/predictions.py
+      - utils/files_management.py
+      - utils/data_processing.py
+      - config/paths.py
+      - data/raw/qualifying.txt
+      - models/svd_model.pkl
+      - artifacts/valid_users.pkl
+      - artifacts/valid_movies.pkl
+      - data/raw/movie_titles_fixed.csv
+    outs:
+      - data/final/predictions.csv
