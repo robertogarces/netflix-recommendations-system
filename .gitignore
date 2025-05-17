@@ -22,12 +22,31 @@ venv/
 *.log
 
 # Ignore data, models, and artifacts directories since they are tracked by DVC
-data/*
+# Ignore normal data files inside data/, models/, artifacts/
+data/**/*.csv
+data/**/*.txt
+data/**/*.parquet
+models/**/*.pkl
+artifacts/**/*.pkl
+
+# Do NOT ignore the directories themselves, so Git can traverse into them
+!data/
+!data/**/
+!models/
+!models/**/
+!artifacts/
+!artifacts/**/
+
+# Do NOT ignore the DVC metafiles, we want to track these
+!data/**/*.dvc
+!models/**/*.dvc
+!artifacts/**/*.dvc
+
+# Keep .gitkeep files (optional) to maintain empty directories if needed
 !data/.gitkeep
-models/*
 !models/.gitkeep
-artifacts/*
 !artifacts/.gitkeep
+
 
 # Optional: Keep README or important files in data folder (uncomment if needed)
 !data/README.md
