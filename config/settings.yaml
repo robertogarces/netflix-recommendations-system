@@ -1,5 +1,5 @@
 preprocessing:
-  num_raw_files: 1
+  num_raw_files: 4
   raw_filenames_pattern: "combined_data_{}.txt"
   min_rating: 1
   max_rating: 5
@@ -8,7 +8,7 @@ preprocessing:
 
 model:
   test_size: 0.2
-  data_sample_fraction: 0.1  # Between 0 and 1
+  data_sample_fraction: 0.25  # Between 0 and 1
   top_n: 10
   threshold: 4.0 # Threshold defines the minimum predicted rating to consider a recommendation relevant for precision and recall calculation.
   n_trials: 10
