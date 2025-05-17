@@ -1,5 +1,5 @@
 preprocessing:
-  num_raw_files: 4
+  num_raw_files: 1
   raw_filenames_pattern: "combined_data_{}.txt"
   min_rating: 1
   max_rating: 5
