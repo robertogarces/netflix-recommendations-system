@@ -54,9 +54,6 @@ Note: The project must be a Git repository for DVC to work correctly.
 🧪 Run Individual Scripts (Optional)
 You can also manually run individual pipeline stages inside the container:
 
-bash
-Copiar
-Editar
 # Preprocessing
 docker run --rm -v $(pwd):/app netflix-pipeline python -m src.preprocessing
 
@@ -65,6 +62,8 @@ docker run --rm -v $(pwd):/app netflix-pipeline python -m src.training
 
 # Prediction
 docker run --rm -v $(pwd):/app netflix-pipeline python -m src.predictions
+
+
 📁 Volumes & Data Persistence
 To preserve data and artifacts between runs, mount the entire project directory using:
 
@@ -74,19 +73,15 @@ Editar
 -v $(pwd):/app
 Alternatively, you can mount folders individually (less recommended):
 
-bash
-Copiar
-Editar
 docker run --rm \
   -v $(pwd)/data:/app/data \
   -v $(pwd)/models:/app/models \
   -v $(pwd)/artifacts:/app/artifacts \
   netflix-pipeline
+
 📋 Requirements
 Docker
-
 Git
-
 No need to install Python or DVC locally — everything runs inside Docker
 
 ✅ Tips
