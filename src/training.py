@@ -7,7 +7,6 @@ import mlflow.sklearn
 from surprise import Dataset, Reader, SVD, accuracy
 import pickle
 import yaml
-from pathlib import Path
 
 sys.path.append('../')
 
@@ -23,6 +22,8 @@ logger = logging.getLogger(__name__)
 def load_data(data_path: str, sample_fraction: float):
     logger.info(f"Loading data from {data_path}")
     data = pd.read_parquet(data_path)
+
+    # As the dataset contains 100M rows we might use just a proportion of it so it's easier to process 
     if sample_fraction < 1.0:
         data = data.sample(frac=sample_fraction, random_state=42)
         logger.info(f"Sampled {sample_fraction*100}% of data, resulting in {len(data)} rows")
@@ -32,13 +33,15 @@ def load_data(data_path: str, sample_fraction: float):
 
 def prepare_datasets(df: pd.DataFrame, test_size: float):
     logger.info(f"Splitting data into train/test with test_size={test_size}")
+    # Train and testing are divided according to the date of the rating. Test size is defined at config/settings.yaml
     train_df, test_df = temporal_train_test_split(df, test_size=test_size)
-
+    # Format the datasets so they can be trained with a SVD
     reader = Reader(rating_scale=(df['rating'].min(), df['rating'].max()))
     trainset = Dataset.load_from_df(train_df[['customer_id', 'movie_id', 'rating']], reader).build_full_trainset()
     testset = list(zip(test_df['customer_id'], test_df['movie_id'], test_df['rating']))
     return trainset, testset
 
+# Optimize SVD model hyper params with Optuna
 def objective(trial, trainset, testset, config):
     params = {
         'n_factors': trial.suggest_int('n_factors', config['n_factors_min'], config['n_factors_max']),
@@ -47,6 +50,7 @@ def objective(trial, trainset, testset, config):
         'reg_all': trial.suggest_float('reg_all', config['reg_all_min'], config['reg_all_max'], log=True)
     }
 
+    # Start a ML Flow process so all of the experiments are recorded
     with mlflow.start_run(nested=True):
         mlflow.log_params(params)
 
@@ -70,6 +74,7 @@ def main():
     mlflow.set_experiment("Netflix_SVD_Optimization")
 
     with mlflow.start_run(run_name="SVD-Optuna-Tuning"):
+        # At config/settings.yaml we can choose wheter we optimize the SVD model. This file also contains other settings for both training and optimization
         if model_cfg.get("optimize", False):
             logger.info("Starting hyperparameter optimization with Optuna")
             study = optuna.create_study(direction='minimize')
@@ -87,6 +92,7 @@ def main():
             with open(CONFIG_PATH / "best_params.yaml", "w") as f:
                 yaml.dump(best_params, f)
                 logger.info("Best parameters saved to best_params.yaml")
+        # If we don't want to optimize the model, it's going to be trained with the last saved best parameters. If there's not a best params file it is going to be trained with the parameters below
         else:
             try:
                 with open(CONFIG_PATH / "best_params.yaml") as f:

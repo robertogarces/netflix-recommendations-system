@@ -1,6 +1,5 @@
 import sys
 import logging
-import numpy as np
 import pandas as pd
 from pathlib import Path
 
@@ -19,7 +18,7 @@ logger = logging.getLogger(__name__)
 config = load_config(CONFIG_PATH / "settings.yaml")
 preproc_cfg = config["preprocessing"]
 
-# Paths
+# Training paths list  (4 different files that have to be concatenated)
 combined_data_path_list = [
     RAW_DATA_PATH / preproc_cfg["raw_filenames_pattern"].format(i) for i in range(1, preproc_cfg["num_raw_files"] + 1)
 ]
@@ -28,6 +27,7 @@ movie_titles_path = RAW_DATA_PATH / "movie_titles.csv"
 movie_titles_fixed_path = RAW_DATA_PATH / "movie_titles_fixed.csv"
 processed_data_path = PROCESSED_DATA_PATH / "processed_data.parquet"
 
+# Training data is divided in 4 different files. They will be concatenated and saved
 def load_and_concatenate_raw_data(paths: list, save_path: Path) -> pd.DataFrame:
     
     logger.info("Loading and combining raw data...")
@@ -38,11 +38,13 @@ def load_and_concatenate_raw_data(paths: list, save_path: Path) -> pd.DataFrame:
         has_ratings=True
         )
 
+# Processing of the concatenated dataframe
 def preprocess_ratings_data(df: pd.DataFrame) -> pd.DataFrame:
 
     logger.info("Converting ID columns to string...")
     df = convert_columns_to_string(df, ['customer_id', 'movie_id'])
 
+    # All of the ratings have to be between 1-5 (min and max rating defined at config/settings.yaml)
     logger.info(f"Filtering valid ratings ({preproc_cfg['min_rating']}-{preproc_cfg['max_rating']})...")
     df = filter_valid_ratings(
         df, 
@@ -50,6 +52,9 @@ def preprocess_ratings_data(df: pd.DataFrame) -> pd.DataFrame:
         max_rating=preproc_cfg["max_rating"]
         )
     
+    # Remove all those movies that have very few ratings and those users that have left very few ratings
+    # Those two parameters are defined at config/settings.yaml
+    # The function generates and saves two pickle files. One of them contains a list of the removed movies and the other one the list of the removed users
     logger.info("Filtering sparse users and movies...")
     df = filter_sparse_users_and_movies(
         df,
