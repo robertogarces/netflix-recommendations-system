@@ -9,12 +9,12 @@ stages:
       size: 487
     - path: config/settings.yaml
       hash: md5
-      md5: 02a83e5003f1e109b432b33d81ec537b
+      md5: fbf8d3b005ee1b84891209087fdd42b6
       size: 684
     - path: data/raw
       hash: md5
-      md5: a09d0c0cf0367f91537534ab5bde7c44.dir
-      size: 2300042001
+      md5: 2697c9d6e3006dd2872ac4618b68ca9a.dir
+      size: 2831321187
       nfiles: 12
     - path: src/preprocessing.py
       hash: md5
@@ -35,16 +35,16 @@ stages:
     outs:
     - path: artifacts/valid_movies.pkl
       hash: md5
-      md5: 6baa790c4d26218ebb98321dae91720a
-      size: 30356
+      md5: d9655d1cb19b8855d9026f11aa0b4e81
+      size: 130688
     - path: artifacts/valid_users.pkl
       hash: md5
-      md5: 9085c4eabf72c603dbdadd9c79c53d00
-      size: 3267223
+      md5: 9b4725fe26b42852c4cc57b93b5498ac
+      size: 4444262
     - path: data/processed/processed_data.parquet
       hash: md5
-      md5: 4845774a2a75059fcfcc31b03fd56c5a
-      size: 298702338
+      md5: 0a80eecfd66a060d49d184126f62cb03
+      size: 1280135175
   train:
     cmd: python -m src.training
     deps:
@@ -58,12 +58,12 @@ stages:
       size: 487
     - path: config/settings.yaml
       hash: md5
-      md5: 02a83e5003f1e109b432b33d81ec537b
+      md5: fbf8d3b005ee1b84891209087fdd42b6
       size: 684
     - path: data/processed/processed_data.parquet
       hash: md5
-      md5: 4845774a2a75059fcfcc31b03fd56c5a
-      size: 298702338
+      md5: 0a80eecfd66a060d49d184126f62cb03
+      size: 1280135175
     - path: src/training.py
       hash: md5
       md5: cc0002628ea2f8e76be8215f94d2d63b
@@ -83,19 +83,19 @@ stages:
     outs:
     - path: models/svd_model.pkl
       hash: md5
-      md5: e2dfb26886bc066417cf4e8de7d5a0ef
-      size: 228604661
+      md5: 87dc1c61004a162ef79c1f22e7607513
+      size: 486251570
   predict:
     cmd: python -m src.predictions
     deps:
     - path: artifacts/valid_movies.pkl
       hash: md5
-      md5: 6baa790c4d26218ebb98321dae91720a
-      size: 30356
+      md5: d9655d1cb19b8855d9026f11aa0b4e81
+      size: 130688
     - path: artifacts/valid_users.pkl
       hash: md5
-      md5: 9085c4eabf72c603dbdadd9c79c53d00
-      size: 3267223
+      md5: 9b4725fe26b42852c4cc57b93b5498ac
+      size: 4444262
     - path: config/paths.py
       hash: md5
       md5: 03611919621942b89b2356fa426fc38d
@@ -110,8 +110,8 @@ stages:
       size: 52452386
     - path: models/svd_model.pkl
       hash: md5
-      md5: e2dfb26886bc066417cf4e8de7d5a0ef
-      size: 228604661
+      md5: 87dc1c61004a162ef79c1f22e7607513
+      size: 486251570
     - path: src/predictions.py
       hash: md5
       md5: 81bde13cc27916b43c31f94b3e8cda1c
@@ -127,5 +127,5 @@ stages:
     outs:
     - path: data/final/predictions.csv
       hash: md5
-      md5: 45df7e42c6bf5d93aff02eca56d61688
-      size: 56702511
+      md5: 5af65f7984fca27736cc59ff2e79c91b
+      size: 201574838
