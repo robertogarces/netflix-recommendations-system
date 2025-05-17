@@ -12,8 +12,7 @@ model:
   top_n: 10
   threshold: 4.0 # Threshold defines the minimum predicted rating to consider a recommendation relevant for precision and recall calculation.
   n_trials: 10
-  optimize: true
-
+  optimize: false  # True or false
 
 model_features:
   user: customer_id
