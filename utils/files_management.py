@@ -1,6 +1,11 @@
 from pathlib import Path
 import pandas as pd
 import pickle
+import logging
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(levelname)s - %(message)s')
+
 
 def fix_csv_with_commas_in_text(
     input_path: Path, 
@@ -144,3 +149,14 @@ def load_model(path: Path):
     with open(path, 'rb') as f:
         model = pickle.load(f)
     return model
+
+def load_data(data_path: str, sample_fraction: float):
+    logger.info(f"Loading data from {data_path}")
+    data = pd.read_parquet(data_path)
+
+    if sample_fraction < 1.0:
+        data = data.sample(frac=sample_fraction, random_state=42)
+        logger.info(f"Sampled {sample_fraction*100}% of data, resulting in {len(data)} rows")
+    else:
+        logger.info(f"Using 100% of data, {len(data)} rows")
+    return data
