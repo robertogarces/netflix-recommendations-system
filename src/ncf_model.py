@@ -1,3 +1,4 @@
+import logging
 import torch
 import pandas as pd
 from torch.utils.data import DataLoader
@@ -6,12 +7,28 @@ import mlflow
 
 from config.paths import PROCESSED_DATA_PATH, MODELS_PATH
 from utils.pytorch_utils import RatingsDataset, NCF, get_device
+from utils.metrics import get_top_n, precision_recall_at_k
+
+# Logging setup
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(levelname)s - %(message)s')
+
+def load_data(data_path: str, sample_fraction: float):
+    logger.info(f"Loading data from {data_path}")
+    data = pd.read_parquet(data_path)
+
+    if sample_fraction < 1.0:
+        data = data.sample(frac=sample_fraction, random_state=42)
+        logger.info(f"Sampled {sample_fraction*100}% of data, resulting in {len(data)} rows")
+    else:
+        logger.info(f"Using 100% of data, {len(data)} rows")
+    return data
+
 
 def train_ncf_model(config):
+
     model_cfg = config["model"]
-    processed_data_path = PROCESSED_DATA_PATH / "processed_data.parquet"
-    data = pd.read_parquet(processed_data_path)
-    data = data.iloc[:int(len(data)*model_cfg['data_sample_fraction'])]
+    data = load_data(PROCESSED_DATA_PATH / "processed_data.parquet", model_cfg['data_sample_fraction'])
 
     user2idx = {u: i for i, u in enumerate(data['customer_id'].unique())}
     item2idx = {m: i for i, m in enumerate(data['movie_id'].unique())}
@@ -32,6 +49,8 @@ def train_ncf_model(config):
 
     best_val_loss = float('inf')
     patience, counter = 3, 0
+
+    logger.info("Starting NCF Model training")
 
     for epoch in range(model_cfg["epochs"]):
         model.train()
@@ -57,7 +76,9 @@ def train_ncf_model(config):
 
         train_rmse = train_loss ** 0.5
         val_rmse = val_loss ** 0.5
-        print(f"Epoch {epoch+1}: Train RMSE = {train_rmse:.4f} | Val RMSE = {val_rmse:.4f}")
+
+        logger.info(f"Epoch {epoch+1}: Train RMSE = {train_rmse:.4f}")
+        logger.info(f"Epoch {epoch+1}: Val RMSE = {val_rmse:.4f}")
 
         mlflow.log_metrics({"train_rmse": train_rmse, "val_rmse": val_rmse}, step=epoch)
 
@@ -70,4 +91,42 @@ def train_ncf_model(config):
             if counter >= patience:
                 break
 
+    logger.info("Best NCF Model saved to models/ncf_model.pt")
+      
+    # Load model and evaluate on testing
+    model.load_state_dict(torch.load(MODELS_PATH / "ncf_model.pt"))
+    model.eval()
+
+    test_loss = 0
+    all_predictions = []
+
+    with torch.no_grad():
+        for u, i, r in test_loader:
+            u, i, r = u.to(device), i.to(device), r.to(device)
+            pred = model(u, i)
+            test_loss += loss_fn(pred, r).item() * len(r)
+
+            # Save preds
+            u_cpu = u.cpu().numpy()
+            i_cpu = i.cpu().numpy()
+            r_cpu = r.cpu().numpy()
+            pred_cpu = pred.cpu().numpy()
+            for uid, iid, true_r, est in zip(u_cpu, i_cpu, r_cpu, pred_cpu):
+                all_predictions.append((uid, iid, true_r, est, None))  # El último campo es 'details' (puede ser None)
+
+    test_loss /= len(test_loader.dataset)
+    test_rmse = test_loss ** 0.5
+    logger.info(f"Final test RMSE: {test_rmse:.4f}")
+    mlflow.log_metric("final_test_rmse", test_rmse)
+
+    top_n = get_top_n(all_predictions, n=model_cfg['top_n'])
+    precision, recall = precision_recall_at_k(all_predictions, k=model_cfg['top_n'], threshold=model_cfg['threshold'])
+    logger.info(f"Precision@{model_cfg['top_n']}: {precision:.4f}")
+    logger.info(f"Recall@{model_cfg['top_n']}: {recall:.4f}")
+    mlflow.log_metric(f"precision_at_{model_cfg['top_n']}", precision)
+    mlflow.log_metric(f"recall_at_{model_cfg['top_n']}", recall)
+
     mlflow.pytorch.log_model(model, "ncf_model")
+
+    mlflow.pytorch.log_model(model, "ncf_model")
+

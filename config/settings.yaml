@@ -9,7 +9,7 @@ preprocessing:
 model:
   type: ncf    # 'svd' or 'ncf'
   test_size: 0.2
-  data_sample_fraction: 0.1  # Between 0 and 1
+  data_sample_fraction: 0.05  # Between 0 and 1
   top_n: 10
   threshold: 4.0 # Threshold defines the minimum predicted rating to consider a recommendation relevant for precision and recall calculation.
   n_trials: 3
