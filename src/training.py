@@ -1,6 +1,5 @@
 import sys
 import logging
-import yaml
 import mlflow
 
 sys.path.append('../')

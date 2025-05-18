@@ -18,8 +18,6 @@ stages:
     cmd: python -m src.training
     deps:
       - src/training.py
-      - src/ncf_model.py
-      - src/svd_model.py
       - utils/metrics.py
       - utils/data_split.py
       - utils/config_loader.py
@@ -28,10 +26,7 @@ stages:
       - config/best_params.yaml
       - data/processed/processed_data.parquet
     outs:
-      # Conditional dependencies. Change if model is switched to SVD
-      - models/ncf_model.pt
-      - artifacts/user2idx.pkl
-      - artifacts/item2idx.pkl
+      - models/svd_model.pkl
 
   predict:
     cmd: python -m src.predictions
@@ -40,15 +35,10 @@ stages:
       - utils/files_management.py
       - utils/data_processing.py
       - config/paths.py
-      - config/settings.yaml
       - data/raw/qualifying.txt
+      - models/svd_model.pkl
       - artifacts/valid_users.pkl
       - artifacts/valid_movies.pkl
       - data/raw/movie_titles_fixed.csv
-      # Conditional dependencies. Change if model is switched to SVD
-      - models/ncf_model.pt
-      - artifacts/user2idx.pkl
-      - artifacts/item2idx.pkl
     outs:
       - data/final/predictions.csv
-
