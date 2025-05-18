@@ -2,37 +2,57 @@ import sys
 import logging
 import pickle
 import pandas as pd
+import torch
+from utils.pytorch_utils import NCF, get_device
 
 sys.path.append('../')
 
-from config.paths import RAW_DATA_PATH, ARTIFACTS_PATH, MODELS_PATH, FINAL_DATA_PATH
+from config.paths import RAW_DATA_PATH, ARTIFACTS_PATH, MODELS_PATH, FINAL_DATA_PATH, CONFIG_PATH
 from utils.files_management import load_model, load_netflix_data
 from utils.data_processing import convert_columns_to_string, filter_unseen
+from utils.config_loader import load_config
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-def generate_predictions(df: pd.DataFrame, model) -> pd.DataFrame:
+def generate_predictions(df: pd.DataFrame, model_type: str, model, user2idx=None, item2idx=None) -> pd.DataFrame:
     """
-    Generates predicted ratings for a given dataframe using a Surprise model.
-
-    Parameters:
-        df (pd.DataFrame): DataFrame with 'customer_id' and 'movie_id'.
-        model: Trained Surprise model.
-
-    Returns:
-        pd.DataFrame: Original DataFrame with an added 'pred_rating' column.
+    Generates predicted ratings using either a Surprise model or an NCF PyTorch model.
     """
-    predictions = []
-    for _, row in df.iterrows():
-        uid = str(row['customer_id'])  # surprise requires string IDs
-        iid = str(row['movie_id'])
+    if model_type == "svd":
+        predictions = []
+        for _, row in df.iterrows():
+            uid = str(row['customer_id'])
+            iid = str(row['movie_id'])
+            pred = model.predict(uid, iid)
+            predictions.append(pred.est)
+        df["pred_rating"] = predictions
 
-        pred = model.predict(uid, iid)
-        predictions.append(pred.est)
+    elif model_type == "ncf":
+        device = get_device()
+        model.to(device)
+        model.eval()
 
-    df["pred_rating"] = predictions
+        # Filtrar usuarios e items que están fuera del vocabulario
+        df = df[df['customer_id'].isin(user2idx.keys()) & df['movie_id'].isin(item2idx.keys())]
+
+        # Mapear a índices
+        df['user_idx'] = df['customer_id'].map(user2idx)
+        df['item_idx'] = df['movie_id'].map(item2idx)
+
+        # Convertir a tensores y predecir en batch si es necesario
+        user_tensor = torch.tensor(df['user_idx'].values, dtype=torch.long).to(device)
+        item_tensor = torch.tensor(df['item_idx'].values, dtype=torch.long).to(device)
+
+        with torch.no_grad():
+            preds = model(user_tensor, item_tensor).cpu().numpy()
+
+        df["pred_rating"] = preds
+
+    else:
+        raise ValueError(f"Unsupported model type: {model_type}")
+
     return df
 
 def main():
@@ -54,13 +74,42 @@ def main():
     # Filter out the users/movies that were removed at the preprocessing step
     df = filter_unseen(df, valid_users=valid_users, valid_movies=valid_movies)
 
-    # Load trained model
-    logger.info("Loading trained SVD model")
-    model = load_model(MODELS_PATH / "svd_model.pkl")
+    config = load_config(CONFIG_PATH / "settings.yaml")
+    model_type = config["model"]["type"].lower()
 
-    # Generate predictions
-    logger.info("Generating predictions")
-    df = generate_predictions(df, model)
+    if model_type == "svd":
+        logger.info("Loading trained SVD model")
+        model = load_model(MODELS_PATH / "svd_model.pkl")
+        df = generate_predictions(df, model_type="svd", model=model)
+
+    elif model_type == "ncf":
+        logger.info("Loading trained NCF model")
+        
+        # Load dictionaries 
+        with open(ARTIFACTS_PATH / "user2idx.pkl", "rb") as f:
+            user2idx = pickle.load(f)
+        with open(ARTIFACTS_PATH / "item2idx.pkl", "rb") as f:
+            item2idx = pickle.load(f)
+
+        # Get embedding size from config
+        emb_size = config["model"]["emb_size"]
+
+        # Create model with correct dimensions
+        num_users = len(user2idx)
+        num_items = len(item2idx)
+        device = get_device()
+
+        model = NCF(num_users=num_users, num_items=num_items, emb_size=emb_size).to(device)
+
+        # Load trained weights
+        model.load_state_dict(torch.load(MODELS_PATH / "ncf_model.pt", map_location=device))
+
+
+        df = generate_predictions(df, model_type="ncf", model=model, user2idx=user2idx, item2idx=item2idx)
+
+    else:
+        raise ValueError("Invalid model type")
+
 
     logger.info(f"Generated {len(df)} predictions")
 

@@ -18,6 +18,8 @@ stages:
     cmd: python -m src.training
     deps:
       - src/training.py
+      - src/ncf_model.py
+      - src/svd_model.py
       - utils/metrics.py
       - utils/data_split.py
       - utils/config_loader.py
@@ -27,6 +29,9 @@ stages:
       - data/processed/processed_data.parquet
     outs:
       - models/svd_model.pkl
+      - models/ncf_model.pt
+      - artifacts/user2idx.pkl
+      - artifacts/item2idx.pkl
 
   predict:
     cmd: python -m src.predictions

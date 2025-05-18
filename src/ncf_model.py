@@ -4,8 +4,9 @@ import pandas as pd
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 import mlflow
+import pickle 
 
-from config.paths import PROCESSED_DATA_PATH, MODELS_PATH
+from config.paths import PROCESSED_DATA_PATH, MODELS_PATH, ARTIFACTS_PATH
 from utils.pytorch_utils import RatingsDataset, NCF, get_device
 from utils.metrics import get_top_n, precision_recall_at_k
 from utils.files_management import load_data
@@ -81,7 +82,13 @@ def train_ncf_model(config):
                 break
 
     logger.info("Best NCF Model saved to models/ncf_model.pt")
-      
+    
+    with open(ARTIFACTS_PATH / "user2idx.pkl", "wb") as f:
+        pickle.dump(user2idx, f)
+
+    with open(ARTIFACTS_PATH / "item2idx.pkl", "wb") as f:
+        pickle.dump(item2idx, f)
+
     # Load model and evaluate on testing
     model.load_state_dict(torch.load(MODELS_PATH / "ncf_model.pt"))
     model.eval()
@@ -114,8 +121,6 @@ def train_ncf_model(config):
     logger.info(f"Recall@{model_cfg['top_n']}: {recall:.4f}")
     mlflow.log_metric(f"precision_at_{model_cfg['top_n']}", precision)
     mlflow.log_metric(f"recall_at_{model_cfg['top_n']}", recall)
-
-    mlflow.pytorch.log_model(model, "ncf_model")
 
     mlflow.pytorch.log_model(model, "ncf_model")
 
