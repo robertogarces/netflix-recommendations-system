@@ -7,12 +7,20 @@ preprocessing:
   min_user_ratings: 10
 
 model:
+  type: ncf    # 'svd' or 'ncf'
   test_size: 0.2
-  data_sample_fraction: 0.25  # Between 0 and 1
+  data_sample_fraction: 0.1  # Between 0 and 1
   top_n: 10
   threshold: 4.0 # Threshold defines the minimum predicted rating to consider a recommendation relevant for precision and recall calculation.
-  n_trials: 10
-  optimize: false  # True or false
+  n_trials: 3
+  optimize: false  # optimize the SVD Model. True or false
+  # NCF model hyperparams
+  emb_size: 32
+  batch_size: 1024
+  epochs: 10
+  lr: 0.001
+  weight_decay: 0.0001
+
 
 model_features:
   user: customer_id
