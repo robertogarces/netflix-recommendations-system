@@ -27,6 +27,7 @@ data/**/*.csv
 data/**/*.txt
 data/**/*.parquet
 models/**/*.pkl
+models/**/*.pt
 artifacts/**/*.pkl
 
 # Do NOT ignore the directories themselves, so Git can traverse into them

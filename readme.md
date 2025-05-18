@@ -28,16 +28,19 @@ This repository contains a modular and reproducible machine learning pipeline bu
 │   ├── predict.ipynb
 │   └── preprocessing.ipynb
 ├── src/                  # Source code: main scripts for preprocessing, training, and prediction
+│   ├── ncf_model.py              
+│   ├── predictions.py
 │   ├── preprocessing.py
-│   ├── training.py
-│   └── predictions.py
+│   ├── svd_model.py
+│   └── training.py
 ├── utils/                # Utility modules for config, data handling, splitting, file ops, and metrics
 │   ├── __init__.py
 │   ├── config_loader.py
 │   ├── data_processing.py
 │   ├── data_split.py
 │   ├── files_management.py
-│   └── metrics.py
+│   ├── metrics.py
+│   └── pytorch_utils.py
 ├── dvc.yaml              # DVC pipeline definition for reproducible data versioning and pipeline stages
 ├── Dockerfile            # Dockerfile to build containerized environment with dependencies and DVC setup
 ├── requirements.txt      # Python pip dependencies
