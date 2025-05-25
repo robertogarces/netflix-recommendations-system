@@ -72,16 +72,18 @@ def train_ncf_model(config):
 
         mlflow.log_metrics({"train_rmse": train_rmse, "val_rmse": val_rmse}, step=epoch)
 
+        ncf_model_path = MODELS_PATH / 'ncf_model.pt'
+
         if val_loss < best_val_loss:
             best_val_loss = val_loss
-            torch.save(model.state_dict(), MODELS_PATH / "ncf_model.pt")
+            torch.save(model.state_dict(), ncf_model_path)
             counter = 0
         else:
             counter += 1
             if counter >= patience:
                 break
 
-    logger.info("Best NCF Model saved to models/ncf_model.pt")
+    logger.info("Best NCF Model saved to {ncf_model_path}")
     
     with open(ARTIFACTS_PATH / "user2idx.pkl", "wb") as f:
         pickle.dump(user2idx, f)
