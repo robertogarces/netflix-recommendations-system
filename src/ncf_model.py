@@ -3,8 +3,9 @@ import torch
 import pandas as pd
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-import mlflow
 import pickle 
+import mlflow
+import mlflow.pytorch
 
 from config.paths import PROCESSED_DATA_PATH, MODELS_PATH, ARTIFACTS_PATH
 from utils.pytorch_utils import RatingsDataset, NCF, get_device
@@ -42,6 +43,18 @@ def train_ncf_model(config):
 
     logger.info("Starting NCF Model training")
 
+    # Log params
+    mlflow.log_params({
+        "emb_size": model_cfg["emb_size"],
+        "batch_size": model_cfg["batch_size"],
+        "lr": model_cfg["lr"],
+        "weight_decay": model_cfg["weight_decay"],
+        "epochs": model_cfg["epochs"],
+        "test_size": model_cfg["test_size"],
+        "data_sample_fraction": model_cfg["data_sample_fraction"]
+            }
+        )
+
     for epoch in range(model_cfg["epochs"]):
         model.train()
         total_loss = 0
@@ -70,7 +83,8 @@ def train_ncf_model(config):
         logger.info(f"Epoch {epoch+1}: Train RMSE = {train_rmse:.4f}")
         logger.info(f"Epoch {epoch+1}: Val RMSE = {val_rmse:.4f}")
 
-        mlflow.log_metrics({"train_rmse": train_rmse, "val_rmse": val_rmse}, step=epoch)
+        mlflow.log_metric("train_rmse", train_rmse, step=epoch+1)
+        mlflow.log_metric("val_rmse", val_rmse, step=epoch+1)
 
         ncf_model_path = MODELS_PATH / 'ncf_model.pt'
 
@@ -85,11 +99,17 @@ def train_ncf_model(config):
 
     logger.info("Best NCF Model saved to {ncf_model_path}")
     
-    with open(ARTIFACTS_PATH / "user2idx.pkl", "wb") as f:
+    user2idx_path = ARTIFACTS_PATH / "user2idx.pkl"
+    item2idx_path = ARTIFACTS_PATH / "item2idx.pkl"
+
+    with open(user2idx_path, "wb") as f:
         pickle.dump(user2idx, f)
 
-    with open(ARTIFACTS_PATH / "item2idx.pkl", "wb") as f:
+    with open(item2idx_path, "wb") as f:
         pickle.dump(item2idx, f)
+
+    mlflow.log_artifact(user2idx_path)
+    mlflow.log_artifact(item2idx_path)
 
     # Load model and evaluate on testing
     model.load_state_dict(torch.load(MODELS_PATH / "ncf_model.pt"))
@@ -110,19 +130,21 @@ def train_ncf_model(config):
             r_cpu = r.cpu().numpy()
             pred_cpu = pred.cpu().numpy()
             for uid, iid, true_r, est in zip(u_cpu, i_cpu, r_cpu, pred_cpu):
-                all_predictions.append((uid, iid, true_r, est, None))  # El último campo es 'details' (puede ser None)
+                all_predictions.append((uid, iid, true_r, est, None))  
 
     test_loss /= len(test_loader.dataset)
     test_rmse = test_loss ** 0.5
     logger.info(f"Final test RMSE: {test_rmse:.4f}")
-    mlflow.log_metric("final_test_rmse", test_rmse)
+    mlflow.log_metric("test_rmse", test_rmse)
 
-    top_n = get_top_n(all_predictions, n=model_cfg['top_n'])
+  #  top_n = get_top_n(all_predictions, n=model_cfg['top_n'])
     precision, recall = precision_recall_at_k(all_predictions, k=model_cfg['top_n'], threshold=model_cfg['threshold'])
+
     logger.info(f"Precision@{model_cfg['top_n']}: {precision:.4f}")
     logger.info(f"Recall@{model_cfg['top_n']}: {recall:.4f}")
-    mlflow.log_metric(f"precision_at_{model_cfg['top_n']}", precision)
-    mlflow.log_metric(f"recall_at_{model_cfg['top_n']}", recall)
 
-    mlflow.pytorch.log_model(model, "ncf_model")
+    mlflow.log_metric("precision_at_k", precision)
+    mlflow.log_metric("recall_at_k", recall)
+
+    mlflow.pytorch.log_model(model, artifact_path="model")
 
