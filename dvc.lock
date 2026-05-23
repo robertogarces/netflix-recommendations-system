@@ -9,11 +9,11 @@ stages:
       size: 487
     - path: config/settings.yaml
       hash: md5
-      md5: c38d66fa481eff7eee2093279512fe71
-      size: 848
+      md5: 3ae0cdbd2aaf4e73ec8f5e9c9951109b
+      size: 2643
     - path: data/raw
       hash: md5
-      md5: a09d0c0cf0367f91537534ab5bde7c44.dir
+      md5: b5c04eaeb87766fb16f2a1b1086ca8a2.dir
       size: 2300042001
       nfiles: 12
     - path: src/preprocessing.py
@@ -35,11 +35,11 @@ stages:
     outs:
     - path: artifacts/valid_movies.pkl
       hash: md5
-      md5: 16e5c88a5f7f1c5abdb4b61b0640b274
+      md5: 6ee6c444c173430e09bcd704fbb0f14a
       size: 30356
     - path: artifacts/valid_users.pkl
       hash: md5
-      md5: a730173c105e3ef9b57341d3f1430e4f
+      md5: 473eabb3c3f561d799ad372701c91d64
       size: 3267223
     - path: data/processed/processed_data.parquet
       hash: md5
@@ -58,8 +58,8 @@ stages:
       size: 487
     - path: config/settings.yaml
       hash: md5
-      md5: c38d66fa481eff7eee2093279512fe71
-      size: 848
+      md5: 3ae0cdbd2aaf4e73ec8f5e9c9951109b
+      size: 2643
     - path: data/processed/processed_data.parquet
       hash: md5
       md5: 4845774a2a75059fcfcc31b03fd56c5a
@@ -99,7 +99,7 @@ stages:
       size: 3884280
     - path: models/ncf_model.pt
       hash: md5
-      md5: 403b9d15f9221a4a3a58d26974085737
+      md5: 67702948438dbdce40ad8a9e08b38e58
       size: 35849193
   predict:
     cmd: python -m src.predictions
@@ -114,11 +114,11 @@ stages:
       size: 3884280
     - path: artifacts/valid_movies.pkl
       hash: md5
-      md5: 16e5c88a5f7f1c5abdb4b61b0640b274
+      md5: 6ee6c444c173430e09bcd704fbb0f14a
       size: 30356
     - path: artifacts/valid_users.pkl
       hash: md5
-      md5: a730173c105e3ef9b57341d3f1430e4f
+      md5: 473eabb3c3f561d799ad372701c91d64
       size: 3267223
     - path: config/paths.py
       hash: md5
@@ -126,8 +126,8 @@ stages:
       size: 487
     - path: config/settings.yaml
       hash: md5
-      md5: c38d66fa481eff7eee2093279512fe71
-      size: 848
+      md5: 3ae0cdbd2aaf4e73ec8f5e9c9951109b
+      size: 2643
     - path: data/raw/movie_titles_fixed.csv
       hash: md5
       md5: 457e476ab9f60c6b469111384dd5ba6a
@@ -138,7 +138,7 @@ stages:
       size: 52452386
     - path: models/ncf_model.pt
       hash: md5
-      md5: 403b9d15f9221a4a3a58d26974085737
+      md5: 67702948438dbdce40ad8a9e08b38e58
       size: 35849193
     - path: src/predictions.py
       hash: md5
@@ -155,5 +155,5 @@ stages:
     outs:
     - path: data/final/predictions.csv
       hash: md5
-      md5: 452cc8d2e3838318a21c1678a4945da1
-      size: 46860270
+      md5: 4c57508b1b82297f33abfff2352600a2
+      size: 46857576
