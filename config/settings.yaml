@@ -28,11 +28,11 @@ model_features:
   rating: rating # Column name in the dataset that represents the rating
 
 svd_hyperparams:
-  n_factors_min: 20
-  n_factors_max: 100
-  n_epochs_min: 5
-  n_epochs_max: 50
-  lr_all_min: 0.0001
-  lr_all_max: 0.1
-  reg_all_min: 0.0001
-  reg_all_max: 0.1
+  n_factors_min: 20 # Minimum number of latent factors to consider for the SVD model during hyperparameter optimization.
+  n_factors_max: 100 # Maximum number of latent factors to consider for the SVD model during hyperparameter optimization.
+  n_epochs_min: 5 # Minimum number of epochs to train the SVD model during hyperparameter optimization.
+  n_epochs_max: 50 # Maximum number of epochs to train the SVD model during hyperparameter optimization.
+  lr_all_min: 0.0001 # Minimum learning rate for the SVD model during hyperparameter optimization.
+  lr_all_max: 0.1 # Maximum learning rate for the SVD model during hyperparameter optimization.
+  reg_all_min: 0.0001 # Minimum regularization term for the SVD model during hyperparameter optimization.
+  reg_all_max: 0.1 # Maximum regularization term for the SVD model during hyperparameter optimization.
