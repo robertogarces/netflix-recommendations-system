@@ -1,12 +1,12 @@
-# Usa una imagen base compatible con ARM64
+# Use an ARM64-compatible base image
 FROM python:3.10-slim
 
-# Variables de entorno para no tener que interactuar en instalación de paquetes
+# Environment variables to avoid interactive package installation prompts
 ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
-# Instalar dependencias del sistema
+# Install system dependencies
 RUN apt-get update && apt-get install -y \
     git \
     curl \
@@ -18,21 +18,21 @@ RUN apt-get update && apt-get install -y \
     libz-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Crear directorio de trabajo
+# Set working directory
 WORKDIR /app
 
-# Copiar archivos de dependencias
+# Copy dependency files
 COPY requirements.txt .
 
-# Instalar dependencias con pip
+# Install Python dependencies
 RUN pip install --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-# Instalar DVC (agrega extras como [gs], [s3], etc. si los necesitas)
+# Install DVC (add extras like [gs], [s3], etc. if needed)
 RUN pip install --no-cache-dir dvc
 
-# Copiar el resto del código
+# Copy the rest of the code
 COPY . .
 
-# Comando por defecto
+# Default command
 CMD ["dvc", "repro"]
