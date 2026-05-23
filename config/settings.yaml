@@ -1,31 +1,31 @@
 preprocessing:
-  num_raw_files: 1
-  raw_filenames_pattern: "combined_data_{}.txt"
-  min_rating: 1
-  max_rating: 5
-  min_movie_ratings: 50
-  min_user_ratings: 10
+  num_raw_files: 1 # Number of raw data files to read. Each file is expected to be named according to the pattern defined in raw_filenames_pattern.
+  raw_filenames_pattern: "combined_data_{}.txt" # Raw data comes in multiple files named combined_data_N.txt, where N is a number from 1 to num_raw_files
+  min_rating: 1 # Ratings are on a scale of 1 to 5
+  max_rating: 5 # Ratings are on a scale of 1 to 5
+  min_movie_ratings: 50 # Minimum number of ratings a movie must have to be included in the dataset
+  min_user_ratings: 10 # Minimum number of ratings a user must have to be included in the dataset
 
 model:
   type: ncf    # 'svd' or 'ncf'
-  test_size: 0.2
-  data_sample_fraction: 0.05  # Between 0 and 1
-  top_n: 10
+  test_size: 0.2 # Fraction of the dataset to be used as test set
+  data_sample_fraction: 0.05  # Fraction of the dataset to be used for training. Between 0 and 1.
+  top_n: 10 # Number of top recommendations to consider for precision and recall calculation.
   threshold: 4.0 # Threshold defines the minimum predicted rating to consider a recommendation relevant for precision and recall calculation.
-  n_trials: 3
+  n_trials: 3 # Number of trials for hyperparameter optimization.
   optimize: false  # optimize the SVD Model. True or false
   # NCF model hyperparams
-  emb_size: 32
-  batch_size: 1024
-  epochs: 10
-  lr: 0.001
-  weight_decay: 0.0001
+  emb_size: 32 # Size of the embedding vectors for users and items in the NCF model
+  batch_size: 1024 # Batch size for training the NCF model
+  epochs: 10 # Number of epochs to train the NCF model
+  lr: 0.001 # Learning rate for the optimizer
+  weight_decay: 0.0001 # Weight decay (L2 regularization) for the optimizer
 
 
 model_features:
-  user: customer_id
-  item: movie_id
-  rating: rating
+  user: customer_id # Column name in the dataset that represents the user ID
+  item: movie_id # Column name in the dataset that represents the item ID
+  rating: rating # Column name in the dataset that represents the rating
 
 svd_hyperparams:
   n_factors_min: 20
