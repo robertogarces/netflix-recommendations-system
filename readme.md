@@ -1,3 +1,11 @@
+![Python](https://img.shields.io/badge/Python-3.10-blue)
+![PyTorch](https://img.shields.io/badge/PyTorch-2.7-EE4C2C?logo=pytorch&logoColor=white)
+![DVC](https://img.shields.io/badge/DVC-pipeline-945DD6?logo=dvc&logoColor=white)
+![MLflow](https://img.shields.io/badge/MLflow-tracking-0194E2?logo=mlflow&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-container-2496ED?logo=docker&logoColor=white)
+![License](https://img.shields.io/badge/License-MIT-green)
+
+
 # 🎬 Netflix ML Pipeline
 
 This repository contains a modular and reproducible machine learning pipeline built with [DVC](https://dvc.org/) and Docker. The goal is to streamline the end-to-end process of data preprocessing, model training, and inference in a clean and organized way.
@@ -61,6 +69,51 @@ The DVC pipeline is defined in `dvc.yaml` and includes the following stages:
 3. **Prediction** – Uses the trained model to generate predictions.
 
 ---
+
+## 📊 Results
+
+Both models were trained on a 5% sample of the Netflix Prize dataset and evaluated
+on a temporal hold-out set (most recent 20% of interactions).
+
+| Metric | NCF | SVD |
+|--------|-----|-----|
+| RMSE | 0.9877 | 1.0264 |
+| Precision@10 | 0.1197 | 0.1460 |
+| Recall@10 | 0.9998 | 0.9956 |
+
+> **Threshold:** a movie is considered relevant if its true rating is ≥ 4.0.
+> Experiments tracked with [MLflow](https://mlflow.org/).
+
+### Interpretation
+
+**RMSE** is acceptable for both models — less than 1 star of error on a 1–5 scale.
+NCF edges out SVD slightly (0.99 vs 1.03), suggesting its neural architecture captures
+user-movie interactions more precisely.
+
+**Recall@10 is near-perfect (~1.0) for both models**, meaning almost every movie a user
+would actually enjoy appears somewhere in the top 10. However, this comes at a cost:
+
+**Precision@10 is low (0.12–0.15)**, meaning only 1 or 2 out of every 10 recommended
+movies are actually relevant to the user. The models are being too generous — they
+predict high ratings broadly rather than selectively.
+
+This Recall/Precision imbalance is a known symptom of training on a **small data sample**.
+With only 5% of the dataset, the models see too few interactions per user to learn
+selective preferences, and tend to recommend popular or broadly-liked movies to everyone.
+
+### Potential Improvements
+
+- **Train on the full dataset** — the most impactful change. Using 100% of the data
+  instead of 5% would give the models enough signal to learn user-specific preferences
+  and improve Precision significantly.
+- **Tune the recommendation threshold** — currently set at 4.0. Raising it to 4.5
+  would make the definition of "relevant" stricter, likely improving Precision at the
+  cost of some Recall.
+- **Hyperparameter optimization for NCF** — SVD uses Optuna for tuning, but NCF
+  hyperparameters are currently fixed. Applying the same optimization strategy to NCF
+  embedding size, learning rate, and regularization could improve its performance.
+- **Increase NCF model capacity** — the current MLP architecture (64→32→1) is relatively
+  shallow. Deeper layers or larger embeddings could capture more complex patterns.
 
 ## 📋 Requirements
 
