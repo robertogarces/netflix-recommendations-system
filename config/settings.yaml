@@ -7,7 +7,7 @@ preprocessing:
   min_user_ratings: 10 # Minimum number of ratings a user must have to be included in the dataset
 
 model:
-  type: svd    # 'svd' or 'ncf'
+  type: ncf    # 'svd' or 'ncf'
   test_size: 0.2 # Fraction of the dataset to be used as test set
   data_sample_fraction: 0.05  # Fraction of the dataset to be used for training. Between 0 and 1.
   top_n: 10 # Number of top recommendations to consider for precision and recall calculation.
