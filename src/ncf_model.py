@@ -9,7 +9,7 @@ import mlflow.pytorch
 
 from config.paths import PROCESSED_DATA_PATH, MODELS_PATH, ARTIFACTS_PATH
 from utils.pytorch_utils import RatingsDataset, NCF, get_device
-from utils.metrics import get_top_n, precision_recall_at_k
+from utils.metrics import precision_recall_at_k
 from utils.files_management import load_data
 
 # Logging setup
@@ -137,7 +137,6 @@ def train_ncf_model(config):
     logger.info(f"Final test RMSE: {test_rmse:.4f}")
     mlflow.log_metric("test_rmse", test_rmse)
 
-  #  top_n = get_top_n(all_predictions, n=model_cfg['top_n'])
     precision, recall = precision_recall_at_k(all_predictions, k=model_cfg['top_n'], threshold=model_cfg['threshold'])
 
     logger.info(f"Precision@{model_cfg['top_n']}: {precision:.4f}")

@@ -9,7 +9,7 @@ from surprise import Dataset, Reader, SVD, accuracy
 
 from config.paths import PROCESSED_DATA_PATH, CONFIG_PATH, MODELS_PATH
 from utils.data_split import temporal_train_test_split
-from utils.metrics import get_top_n, precision_recall_at_k
+from utils.metrics import precision_recall_at_k
 from utils.files_management import load_data
 
 logger = logging.getLogger(__name__)

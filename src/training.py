@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 # Import both training modules
 from src.ncf_model import train_ncf_model
-from src.svd_model import train_svd_model  # Extraemos la lógica SVD actual a esta función (ver abajo)
+from src.svd_model import train_svd_model  
 
 def main():
     config = load_config(CONFIG_PATH / "settings.yaml")

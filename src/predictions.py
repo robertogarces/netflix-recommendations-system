@@ -34,14 +34,14 @@ def generate_predictions(df: pd.DataFrame, model_type: str, model, user2idx=None
         model.to(device)
         model.eval()
 
-        # Filtrar usuarios e items que están fuera del vocabulario
+        # Filter users and items that are not in the training set
         df = df[df['customer_id'].isin(user2idx.keys()) & df['movie_id'].isin(item2idx.keys())]
 
-        # Mapear a índices
+        # Map indexes using the loaded dictionaries
         df['user_idx'] = df['customer_id'].map(user2idx)
         df['item_idx'] = df['movie_id'].map(item2idx)
 
-        # Convertir a tensores y predecir en batch si es necesario
+        # Convert to tensors and predict in batches if necessary
         user_tensor = torch.tensor(df['user_idx'].values, dtype=torch.long).to(device)
         item_tensor = torch.tensor(df['item_idx'].values, dtype=torch.long).to(device)
 
