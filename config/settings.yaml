@@ -7,17 +7,17 @@ preprocessing:
   min_user_ratings: 10 # Minimum number of ratings a user must have to be included in the dataset
 
 model:
-  type: ncf    # 'svd' or 'ncf'
+  type: svd    # 'svd' or 'ncf'
   test_size: 0.2 # Fraction of the dataset to be used as test set
   data_sample_fraction: 0.05  # Fraction of the dataset to be used for training. Between 0 and 1.
   top_n: 10 # Number of top recommendations to consider for precision and recall calculation.
-  threshold: 4.0 # Threshold defines the minimum predicted rating to consider a recommendation relevant for precision and recall calculation.
-  n_trials: 3 # Number of trials for hyperparameter optimization.
-  optimize: false  # optimize the SVD Model. True or false
+  threshold: 4.5 # Threshold defines the minimum predicted rating to consider a recommendation relevant for precision and recall calculation.
+  n_trials: 30 # Number of trials for hyperparameter optimization.
+  optimize: true  # optimize the SVD Model. True or false
   # NCF model hyperparams
   emb_size: 32 # Size of the embedding vectors for users and items in the NCF model
   batch_size: 1024 # Batch size for training the NCF model
-  epochs: 10 # Number of epochs to train the NCF model
+  epochs: 5 # Number of epochs to train the NCF model
   lr: 0.001 # Learning rate for the optimizer
   weight_decay: 0.0001 # Weight decay (L2 regularization) for the optimizer
 
