@@ -9,12 +9,12 @@ stages:
       size: 487
     - path: config/settings.yaml
       hash: md5
-      md5: 3ae0cdbd2aaf4e73ec8f5e9c9951109b
-      size: 2643
+      md5: 6dba474f0f32846f72502c2bed5d4ef7
+      size: 2642
     - path: data/raw
       hash: md5
-      md5: b5c04eaeb87766fb16f2a1b1086ca8a2.dir
-      size: 2300042001
+      md5: 892d4a2268b7dfd2570ea597f84079c8.dir
+      size: 2299985381
       nfiles: 12
     - path: src/preprocessing.py
       hash: md5
@@ -35,47 +35,47 @@ stages:
     outs:
     - path: artifacts/valid_movies.pkl
       hash: md5
-      md5: 6ee6c444c173430e09bcd704fbb0f14a
+      md5: c4484d81a8f04666c778c2b13bf40da1
       size: 30356
     - path: artifacts/valid_users.pkl
       hash: md5
-      md5: 473eabb3c3f561d799ad372701c91d64
+      md5: ee51495ab995f6ae06f4726c1a808cce
       size: 3267223
     - path: data/processed/processed_data.parquet
       hash: md5
-      md5: 4845774a2a75059fcfcc31b03fd56c5a
-      size: 298702338
+      md5: ded5424d90d9a76ad7b5c47df5ec308c
+      size: 302487992
   train:
     cmd: python -m src.training
     deps:
     - path: config/best_params.yaml
       hash: md5
-      md5: b65a2734ba4cd4b2938e62c60fff4213
-      size: 88
+      md5: c9140de87e8328bc79208b7f3cfc4db7
+      size: 83
     - path: config/paths.py
       hash: md5
       md5: 03611919621942b89b2356fa426fc38d
       size: 487
     - path: config/settings.yaml
       hash: md5
-      md5: 3ae0cdbd2aaf4e73ec8f5e9c9951109b
-      size: 2643
+      md5: 6dba474f0f32846f72502c2bed5d4ef7
+      size: 2642
     - path: data/processed/processed_data.parquet
       hash: md5
-      md5: 4845774a2a75059fcfcc31b03fd56c5a
-      size: 298702338
+      md5: ded5424d90d9a76ad7b5c47df5ec308c
+      size: 302487992
     - path: src/ncf_model.py
       hash: md5
-      md5: 9aee5c4f9a71d27eb8182f6102127dc1
-      size: 5285
+      md5: fff9c1a5a47be1fac11e96e87c29e75f
+      size: 5212
     - path: src/svd_model.py
       hash: md5
-      md5: ba4357c14cba4b9a51a044daa9904ab5
-      size: 4780
+      md5: 34acfe0e72b2266016fe71227d36d1c5
+      size: 4391
     - path: src/training.py
       hash: md5
-      md5: d2df9b47ddbdae237c32b05dee25316e
-      size: 1059
+      md5: 954532693d6575d16632a83d61abaa75
+      size: 998
     - path: utils/config_loader.py
       hash: md5
       md5: 11c0967c9b586b99d2f2abd60cc3f22e
@@ -99,7 +99,7 @@ stages:
       size: 3884280
     - path: models/ncf_model.pt
       hash: md5
-      md5: 67702948438dbdce40ad8a9e08b38e58
+      md5: c9d459c67d33b3b98a1559e27b9563fb
       size: 35849193
   predict:
     cmd: python -m src.predictions
@@ -114,11 +114,11 @@ stages:
       size: 3884280
     - path: artifacts/valid_movies.pkl
       hash: md5
-      md5: 6ee6c444c173430e09bcd704fbb0f14a
+      md5: c4484d81a8f04666c778c2b13bf40da1
       size: 30356
     - path: artifacts/valid_users.pkl
       hash: md5
-      md5: 473eabb3c3f561d799ad372701c91d64
+      md5: ee51495ab995f6ae06f4726c1a808cce
       size: 3267223
     - path: config/paths.py
       hash: md5
@@ -126,8 +126,8 @@ stages:
       size: 487
     - path: config/settings.yaml
       hash: md5
-      md5: 3ae0cdbd2aaf4e73ec8f5e9c9951109b
-      size: 2643
+      md5: 6dba474f0f32846f72502c2bed5d4ef7
+      size: 2642
     - path: data/raw/movie_titles_fixed.csv
       hash: md5
       md5: 457e476ab9f60c6b469111384dd5ba6a
@@ -138,12 +138,12 @@ stages:
       size: 52452386
     - path: models/ncf_model.pt
       hash: md5
-      md5: 67702948438dbdce40ad8a9e08b38e58
+      md5: c9d459c67d33b3b98a1559e27b9563fb
       size: 35849193
     - path: src/predictions.py
       hash: md5
-      md5: 560266c921b4760436fae12d0b8b34ab
-      size: 4838
+      md5: 97efbbd17b284825d7d3434edda2d526
+      size: 4858
     - path: utils/data_processing.py
       hash: md5
       md5: 116d8cd10b431f7119f9de3f419560c3
@@ -155,5 +155,5 @@ stages:
     outs:
     - path: data/final/predictions.csv
       hash: md5
-      md5: 4c57508b1b82297f33abfff2352600a2
-      size: 46857576
+      md5: b101eccb1074bd9b26f9bc6f948676ed
+      size: 46873624
