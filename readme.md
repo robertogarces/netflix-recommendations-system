@@ -57,8 +57,36 @@ This repository contains a modular and reproducible machine learning pipeline bu
 The DVC pipeline is defined in `dvc.yaml` and includes the following stages:
 
 1. **Preprocessing** – Cleans and transforms the input data.
-2. **Training** – Trains a classification model.
+2. **Training** – Trains a recommendation system model.
 3. **Prediction** – Uses the trained model to generate predictions.
+
+---
+
+## 📋 Requirements
+
+Docker
+Git
+A Kaggle account to download the dataset
+No need to install Python or DVC locally — everything runs inside Docker
+
+---
+
+## 📥 Data Setup
+This project uses the Netflix Prize dataset from Kaggle. The raw data files are not included in this repository and must be downloaded manually.
+Steps:
+
+Go to the dataset page on Kaggle and download the files.
+Place the following files inside data/raw/:
+
+data/raw/
+├── combined_data_1.txt
+├── combined_data_2.txt
+├── combined_data_3.txt
+├── combined_data_4.txt
+├── movie_titles.csv
+└── qualifying.txt
+
+The pipeline is configured to use only combined_data_1.txt by default (num_raw_files: 1 in settings.yaml). Set it to 4 to use the full dataset.
 
 ---
 
