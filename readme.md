@@ -6,9 +6,11 @@
 ![License](https://img.shields.io/badge/License-MIT-green)
 
 
-# 🎬 Netflix ML Pipeline
+# 🎬 Netflix Movie Recommendation System — End-to-End ML Pipeline
 
 This repository contains a modular and reproducible machine learning pipeline built with [DVC](https://dvc.org/) and Docker. The goal is to streamline the end-to-end process of data preprocessing, model training, and inference in a clean and organized way.
+
+📖 For full technical documentation, including model design, pipeline stages, evaluation metrics, and artifacts, see [docs/netflix-model-docs.md](docs/netflix-model-docs.md).
 
 ---
 
@@ -115,11 +117,12 @@ selective preferences, and tend to recommend popular or broadly-liked movies to 
 - **Increase NCF model capacity** — the current MLP architecture (64→32→1) is relatively
   shallow. Deeper layers or larger embeddings could capture more complex patterns.
 
-## 📋 Requirements
 
-Docker
-Git
-A Kaggle account to download the dataset
+## 📋 Requirements
+/
+* Docker
+* Git
+* A Kaggle account to download the dataset
 No need to install Python or DVC locally — everything runs inside Docker
 
 ---
