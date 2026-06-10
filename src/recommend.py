@@ -179,7 +179,13 @@ def run_batch(model, checkpoint, k, batch_size, num_items, device, rating_scale,
     logger.info(f"Saved {len(out):,} recommendations ({len(users):,} users × {k}) to {output_path}")
 
 
-def run_inspect(model, checkpoint, user_id, k, num_items, device, rating_scale):
+def recommend_single_user(
+    model, checkpoint, user_id, k, num_items, device, rating_scale
+) -> tuple[pd.DataFrame, str]:
+    """Top-K for one user as a DataFrame, plus the segment ("warm"/"cold").
+
+    Shared by the CLI inspect mode and the dashboard — both wrap this.
+    """
     user2idx, item2idx = checkpoint["user2idx"], checkpoint["item2idx"]
     idx2movie = {idx: mid for mid, idx in item2idx.items()}
     titles = load_movie_titles()
@@ -190,15 +196,29 @@ def run_inspect(model, checkpoint, user_id, k, num_items, device, rating_scale):
             model, [user2idx[user_id]], seen_by_user, k, 1, num_items, device, rating_scale
         )
         rec_items, rec_scores = rec_items[0], rec_scores[0]
-        header = f"Top-{k} for user {user_id} (personalized)"
+        segment = "warm"
     else:
         rec_items, rec_scores = cold_start_topk(model, k, num_items, device)
-        header = f"Top-{k} for user {user_id} (cold start — popularity fallback)"
+        segment = "cold"
+
+    movie_ids = [idx2movie[i] for i in rec_items]
+    df = pd.DataFrame({
+        "rank":     range(1, len(movie_ids) + 1),
+        "movie_id": movie_ids,
+        "title":    [titles.get(m, "<unknown>") for m in movie_ids],
+        "score":    rec_scores,
+    })
+    return df, segment
+
+
+def run_inspect(model, checkpoint, user_id, k, num_items, device, rating_scale):
+    df, segment = recommend_single_user(model, checkpoint, user_id, k, num_items, device, rating_scale)
+    label = "personalized" if segment == "warm" else "cold start — popularity fallback"
+    header = f"Top-{k} for user {user_id} ({label})"
 
     print(f"\n{header}\n" + "-" * len(header))
-    for rank, (item_idx, score) in enumerate(zip(rec_items, rec_scores), start=1):
-        movie_id = idx2movie[item_idx]
-        print(f"{rank:>2}. {titles.get(movie_id, '<unknown>'):<45} (movie_id={movie_id}, score={score:.3f})")
+    for row in df.itertuples(index=False):
+        print(f"{row.rank:>2}. {row.title:<45} (movie_id={row.movie_id}, score={row.score:.3f})")
     print()
 
 
