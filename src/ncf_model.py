@@ -18,24 +18,33 @@ logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(levelname)s - %(
 
 def train_ncf_model(config):
 
-    model_cfg = config["model"]
-    data = load_data(PROCESSED_DATA_PATH / "processed_data.parquet", model_cfg['data_sample_fraction'])
+    training_cfg = config["training"]
+    eval_cfg     = config["evaluation"]
+    ncf_cfg      = config["ncf"]
 
-    user2idx = {u: i for i, u in enumerate(data['customer_id'].unique())}
-    item2idx = {m: i for i, m in enumerate(data['movie_id'].unique())}
+    data = load_data(PROCESSED_DATA_PATH / "processed_data.parquet", training_cfg['data_sample_fraction'])
+
+    with open(ARTIFACTS_PATH / "user2idx.pkl", "rb") as f:
+        user2idx = pickle.load(f)
+    with open(ARTIFACTS_PATH / "item2idx.pkl", "rb") as f:
+        item2idx = pickle.load(f)
+
+    data = data[data['customer_id'].isin(user2idx) & data['movie_id'].isin(item2idx)].copy()
     data['user_idx'] = data['customer_id'].map(user2idx)
     data['item_idx'] = data['movie_id'].map(item2idx)
 
-    split_idx = int(len(data) * (1 - model_cfg['test_size']))
-    train_df = data.iloc[:split_idx]
-    test_df = data.iloc[split_idx:]
+    sorted_idx = data['date'].argsort()
+    split_idx  = int(len(data) * (1 - training_cfg['test_size']))
+    split_date = data['date'].iloc[sorted_idx.iloc[split_idx]]
+    train_df   = data[data['date'] < split_date]
+    test_df    = data[data['date'] >= split_date]
 
-    train_loader = DataLoader(RatingsDataset(train_df), batch_size=model_cfg["batch_size"], shuffle=True)
-    test_loader = DataLoader(RatingsDataset(test_df), batch_size=model_cfg["batch_size"])
+    train_loader = DataLoader(RatingsDataset(train_df), batch_size=ncf_cfg["batch_size"], shuffle=True)
+    test_loader  = DataLoader(RatingsDataset(test_df),  batch_size=ncf_cfg["batch_size"])
 
     device = get_device()
-    model = NCF(len(user2idx), len(item2idx), emb_size=model_cfg["emb_size"]).to(device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=model_cfg["lr"], weight_decay=model_cfg["weight_decay"])
+    model = NCF(len(user2idx), len(item2idx), emb_size=ncf_cfg["emb_size"]).to(device)
+    optimizer = torch.optim.Adam(model.parameters(), lr=ncf_cfg["lr"], weight_decay=ncf_cfg["weight_decay"])
     loss_fn = torch.nn.MSELoss()
 
     best_val_loss = float('inf')
@@ -43,19 +52,17 @@ def train_ncf_model(config):
 
     logger.info("Starting NCF Model training")
 
-    # Log params
     mlflow.log_params({
-        "emb_size": model_cfg["emb_size"],
-        "batch_size": model_cfg["batch_size"],
-        "lr": model_cfg["lr"],
-        "weight_decay": model_cfg["weight_decay"],
-        "epochs": model_cfg["epochs"],
-        "test_size": model_cfg["test_size"],
-        "data_sample_fraction": model_cfg["data_sample_fraction"]
-            }
-        )
+        "emb_size":              ncf_cfg["emb_size"],
+        "batch_size":            ncf_cfg["batch_size"],
+        "lr":                    ncf_cfg["lr"],
+        "weight_decay":          ncf_cfg["weight_decay"],
+        "epochs":                ncf_cfg["epochs"],
+        "test_size":             training_cfg["test_size"],
+        "data_sample_fraction":  training_cfg["data_sample_fraction"],
+    })
 
-    for epoch in range(model_cfg["epochs"]):
+    for epoch in range(ncf_cfg["epochs"]):
         model.train()
         total_loss = 0
         for u, i, r in tqdm(train_loader, desc=f"Epoch {epoch+1}"):
@@ -97,19 +104,10 @@ def train_ncf_model(config):
             if counter >= patience:
                 break
 
-    logger.info("Best NCF Model saved to {ncf_model_path}")
-    
-    user2idx_path = ARTIFACTS_PATH / "user2idx.pkl"
-    item2idx_path = ARTIFACTS_PATH / "item2idx.pkl"
+    logger.info(f"Best NCF Model saved to {ncf_model_path}")
 
-    with open(user2idx_path, "wb") as f:
-        pickle.dump(user2idx, f)
-
-    with open(item2idx_path, "wb") as f:
-        pickle.dump(item2idx, f)
-
-    mlflow.log_artifact(user2idx_path)
-    mlflow.log_artifact(item2idx_path)
+    mlflow.log_artifact(ARTIFACTS_PATH / "user2idx.pkl")
+    mlflow.log_artifact(ARTIFACTS_PATH / "item2idx.pkl")
 
     # Load model and evaluate on testing
     model.load_state_dict(torch.load(MODELS_PATH / "ncf_model.pt"))
@@ -137,10 +135,12 @@ def train_ncf_model(config):
     logger.info(f"Final test RMSE: {test_rmse:.4f}")
     mlflow.log_metric("test_rmse", test_rmse)
 
-    precision, recall = precision_recall_at_k(all_predictions, k=model_cfg['top_n'], threshold=model_cfg['threshold'])
+    top_n     = eval_cfg['top_n']
+    threshold = eval_cfg['relevance_threshold']
+    precision, recall = precision_recall_at_k(all_predictions, k=top_n, threshold=threshold)
 
-    logger.info(f"Precision@{model_cfg['top_n']}: {precision:.4f}")
-    logger.info(f"Recall@{model_cfg['top_n']}: {recall:.4f}")
+    logger.info(f"Precision@{top_n}: {precision:.4f}")
+    logger.info(f"Recall@{top_n}:    {recall:.4f}")
 
     mlflow.log_metric("precision_at_k", precision)
     mlflow.log_metric("recall_at_k", recall)

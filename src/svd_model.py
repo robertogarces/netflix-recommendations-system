@@ -7,7 +7,7 @@ import mlflow
 import mlflow.sklearn
 from surprise import Dataset, Reader, SVD, accuracy
 
-from config.paths import PROCESSED_DATA_PATH, CONFIG_PATH, MODELS_PATH
+from config.paths import PROCESSED_DATA_PATH, CONFIG_PATH, MODELS_PATH, ARTIFACTS_PATH
 from utils.data_split import temporal_train_test_split
 from utils.metrics import precision_recall_at_k
 from utils.files_management import load_data
@@ -25,12 +25,12 @@ def prepare_datasets(df: pd.DataFrame, test_size: float):
     return trainset, testset
 
 
-def objective(trial, trainset, testset, config):
+def objective(trial, trainset, testset, search_space):
     params = {
-        'n_factors': trial.suggest_int('n_factors', config['n_factors_min'], config['n_factors_max']),
-        'n_epochs': trial.suggest_int('n_epochs', config['n_epochs_min'], config['n_epochs_max']),
-        'lr_all': trial.suggest_float('lr_all', config['lr_all_min'], config['lr_all_max'], log=True),
-        'reg_all': trial.suggest_float('reg_all', config['reg_all_min'], config['reg_all_max'], log=True)
+        'n_factors': trial.suggest_int('n_factors', *search_space['n_factors']),
+        'n_epochs':  trial.suggest_int('n_epochs',  *search_space['n_epochs']),
+        'lr_all':    trial.suggest_float('lr_all',  *search_space['lr_all'],  log=True),
+        'reg_all':   trial.suggest_float('reg_all', *search_space['reg_all'], log=True),
     }
     model = SVD(**params)
     model.fit(trainset)
@@ -39,45 +39,40 @@ def objective(trial, trainset, testset, config):
 
 
 def train_svd_model(config):
-    model_cfg = config["model"]
-    svd_hyperparams = config["svd_hyperparams"]
+    training_cfg   = config["training"]
+    eval_cfg       = config["evaluation"]
+    svd_cfg        = config["svd"]
 
-    data = load_data(PROCESSED_DATA_PATH / "processed_data.parquet", model_cfg['data_sample_fraction'])
-    trainset, testset = prepare_datasets(data, model_cfg['test_size'])
+    data = load_data(PROCESSED_DATA_PATH / "processed_data.parquet", training_cfg['data_sample_fraction'])
+    trainset, testset = prepare_datasets(data, training_cfg['test_size'])
 
-    # ✅ Sin mlflow.set_experiment() ni mlflow.start_run() — igual que NCF
     mlflow.log_params({
-        "data_sample_fraction": model_cfg["data_sample_fraction"],
-        "test_size": model_cfg["test_size"]
+        "data_sample_fraction": training_cfg["data_sample_fraction"],
+        "test_size": training_cfg["test_size"],
     })
 
-    if model_cfg.get("optimize", False):
+    if svd_cfg.get("optimize", False):
         logger.info("Starting hyperparameter optimization with Optuna")
         study = optuna.create_study(direction='minimize')
         study.optimize(
-            lambda trial: objective(trial, trainset, testset, svd_hyperparams),
-            n_trials=model_cfg['n_trials']
+            lambda trial: objective(trial, trainset, testset, svd_cfg['search_space']),
+            n_trials=svd_cfg['n_trials']
         )
         best_params = study.best_params
         mlflow.log_metric("best_rmse_optuna", study.best_value)
         logger.info(f"Best RMSE: {study.best_value:.4f} | Best params: {best_params}")
 
-        with open(CONFIG_PATH / "best_params.yaml", "w") as f:
+        with open(ARTIFACTS_PATH / "best_params.yaml", "w") as f:
             yaml.dump(best_params, f)
-            logger.info("Best parameters saved to best_params.yaml")
+        logger.info("Best parameters saved to best_params.yaml")
     else:
         try:
-            with open(CONFIG_PATH / "best_params.yaml") as f:
+            with open(ARTIFACTS_PATH / "best_params.yaml") as f:
                 best_params = yaml.safe_load(f)
-                logger.info("Loaded best parameters from best_params.yaml")
+            logger.info("Loaded best parameters from best_params.yaml")
         except FileNotFoundError:
-            logger.warning("best_params.yaml not found. Using default parameters.")
-            best_params = {
-                'n_factors': 100,
-                'n_epochs': 20,
-                'lr_all': 0.005,
-                'reg_all': 0.02
-            }
+            logger.warning("best_params.yaml not found. Using default SVD parameters.")
+            best_params = {k: svd_cfg[k] for k in ('n_factors', 'n_epochs', 'lr_all', 'reg_all')}
 
     mlflow.log_params(best_params)
 
@@ -90,13 +85,13 @@ def train_svd_model(config):
     mlflow.log_metric("rmse", rmse)
     logger.info(f"RMSE: {rmse:.4f}")
 
-    precision, recall = precision_recall_at_k(
-        predictions, k=model_cfg['top_n'], threshold=model_cfg['threshold']
-    )
-    logger.info(f"Precision@{model_cfg['top_n']}: {precision:.4f}")
-    logger.info(f"Recall@{model_cfg['top_n']}: {recall:.4f}")
-    mlflow.log_metric(f"precision_at_k", precision)
-    mlflow.log_metric(f"recall_at_k", recall)
+    top_n     = eval_cfg['top_n']
+    threshold = eval_cfg['relevance_threshold']
+    precision, recall = precision_recall_at_k(predictions, k=top_n, threshold=threshold)
+    logger.info(f"Precision@{top_n}: {precision:.4f}")
+    logger.info(f"Recall@{top_n}:    {recall:.4f}")
+    mlflow.log_metric("precision_at_k", precision)
+    mlflow.log_metric("recall_at_k", recall)
 
     model_output_path = MODELS_PATH / "svd_model.pkl"
     with open(model_output_path, 'wb') as f:
@@ -104,6 +99,6 @@ def train_svd_model(config):
     logger.info(f"Model saved to {model_output_path}")
     mlflow.log_artifact(model_output_path)
 
-    best_params_path = CONFIG_PATH / "best_params.yaml"
+    best_params_path = ARTIFACTS_PATH / "best_params.yaml"
     if best_params_path.exists():
         mlflow.log_artifact(best_params_path)
