@@ -35,13 +35,24 @@ def load_processed(sample_fraction: float, seed: int) -> pd.DataFrame:
     return df
 
 
-def temporal_split(df: pd.DataFrame, test_size: float) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Split at the (1 - test_size) date quantile: train on the past, test on
-    the future. Prevents leakage and mirrors deployment conditions."""
-    sorted_idx = df["date"].argsort()
-    split_idx  = int(len(df) * (1 - test_size))
-    split_date = df["date"].iloc[sorted_idx.iloc[split_idx]]
-    return df[df["date"] < split_date], df[df["date"] >= split_date]
+def temporal_split(
+    df: pd.DataFrame, val_size: float, test_size: float
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """Three-way temporal split: train on the past, validate on the middle
+    window, test on the most recent one.
+
+    Validation drives early stopping and LR scheduling during training; the
+    test window stays untouched until src.evaluate, so reported test metrics
+    are free of model-selection bias.
+    """
+    dates = df["date"].sort_values()
+    val_date  = dates.iloc[int(len(df) * (1 - val_size - test_size))]
+    test_date = dates.iloc[int(len(df) * (1 - test_size))]
+
+    train = df[df["date"] < val_date]
+    val   = df[(df["date"] >= val_date) & (df["date"] < test_date)]
+    test  = df[df["date"] >= test_date]
+    return train, val, test
 
 
 def add_index_columns(df: pd.DataFrame) -> tuple[pd.DataFrame, dict, dict]:

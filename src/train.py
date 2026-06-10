@@ -46,15 +46,20 @@ def main():
     # data and saved with the model (see add_index_columns for rationale).
     df, user2idx, item2idx = add_index_columns(df)
 
-    train_df, test_df = temporal_split(df, training_cfg["test_size"])
-    logger.info(f"Train: {len(train_df):,} rows | Test: {len(test_df):,} rows")
+    # Three-way split: val drives early stopping, test stays untouched until
+    # src.evaluate so reported test metrics carry no model-selection bias.
+    train_df, val_df, test_df = temporal_split(
+        df, training_cfg["val_size"], training_cfg["test_size"]
+    )
+    logger.info(f"Train: {len(train_df):,} | Val: {len(val_df):,} | Test: {len(test_df):,} rows")
 
     # Flag test rows from users with no training history (joined after the
     # split date). Their RMSE is a cold-start floor no CF model can beat, so
     # evaluate reports warm/cold segments separately.
     train_user_ids = set(train_df["customer_id"].unique())
     test_df = test_df.assign(is_cold_user=~test_df["customer_id"].isin(train_user_ids))
-    logger.info(f"Cold-user test rows: {test_df['is_cold_user'].mean():.1%}")
+    cold_fraction = test_df["is_cold_user"].mean()
+    logger.info(f"Cold-user test rows: {cold_fraction:.1%}")
 
     ARTIFACTS_PATH.mkdir(parents=True, exist_ok=True)
     test_df.to_parquet(ARTIFACTS_PATH / "test_set.parquet", index=False)
@@ -64,7 +69,7 @@ def main():
     logger.info(f"Device: {device}")
 
     train_users, train_items, train_ratings = to_tensors(train_df, device)
-    test_users,  test_items,  test_ratings  = to_tensors(test_df, device)
+    val_users,   val_items,   val_ratings   = to_tensors(val_df, device)
 
     global_mean = train_ratings.mean().item()
     model = NCF(
@@ -82,14 +87,22 @@ def main():
     batch_size = ncf_cfg["batch_size"]
 
     mlflow.set_experiment("Netflix_NCF")
-    with mlflow.start_run(run_name="NCF_Training"):
+    with mlflow.start_run(run_name="NCF_Training") as run:
         mlflow.log_params({
             **ncf_cfg,
+            "seed":                 seed,
+            "val_size":             training_cfg["val_size"],
             "test_size":            training_cfg["test_size"],
             "data_sample_fraction": training_cfg["data_sample_fraction"],
             "num_users":            len(user2idx),
             "num_items":            len(item2idx),
+            "n_train_rows":         len(train_df),
+            "n_val_rows":           len(val_df),
+            "n_test_rows":          len(test_df),
+            "cold_user_fraction":   round(float(cold_fraction), 4),
         })
+        # Full config snapshot for exact reproducibility of this run
+        mlflow.log_artifact(str(CONFIG_PATH / "settings.yaml"))
 
         best_val_rmse = float("inf")
         patience   = ncf_cfg["early_stopping_patience"]
@@ -99,13 +112,15 @@ def main():
 
         def save_checkpoint():
             # Self-contained: everything evaluate/inference needs to rebuild
-            # the exact model and map raw IDs to embedding indices.
+            # the exact model and map raw IDs to embedding indices. The mlflow
+            # run id lets evaluate attach its test metrics to this run.
             torch.save({
-                "state_dict":  model.state_dict(),
-                "user2idx":    user2idx,
-                "item2idx":    item2idx,
-                "global_mean": global_mean,
-                "ncf_config":  ncf_cfg,
+                "state_dict":     model.state_dict(),
+                "user2idx":       user2idx,
+                "item2idx":       item2idx,
+                "global_mean":    global_mean,
+                "ncf_config":     ncf_cfg,
+                "mlflow_run_id":  run.info.run_id,
             }, model_path)
 
         n_train = len(train_users)
@@ -124,7 +139,7 @@ def main():
                 train_sq_error += loss.detach() * len(b)
             train_rmse = (train_sq_error.item() / n_train) ** 0.5
 
-            val_rmse = validation_rmse(model, test_users, test_items, test_ratings, batch_size, rating_scale)
+            val_rmse = validation_rmse(model, val_users, val_items, val_ratings, batch_size, rating_scale)
             scheduler.step(val_rmse)
 
             lr = optimizer.param_groups[0]["lr"]

@@ -122,9 +122,14 @@ def main():
     logger.info(f"Precision@{k}:   {precision:.4f}  (warm: {precision_warm:.4f})")
     logger.info(f"Recall@{k}:      {recall:.4f}  (warm: {recall_warm:.4f})")
 
-    mlflow.set_experiment("Netflix_NCF")
-    with mlflow.start_run(run_name="NCF_Evaluation"):
-        mlflow.log_params({"k": k, "threshold": threshold})
+    # Attach test metrics to the training run that produced this checkpoint,
+    # so one mlflow run holds the full story: params, training curves, test.
+    run_id = checkpoint.get("mlflow_run_id")
+    if run_id is None:
+        mlflow.set_experiment("Netflix_NCF")
+    with mlflow.start_run(run_id=run_id, run_name=None if run_id else "NCF_Evaluation"):
+        # Tags (not params) — re-evaluating with a different k must not clash
+        mlflow.set_tags({"eval_k": k, "eval_threshold": threshold})
         mlflow.log_metrics({
             "test_rmse":           rmse,
             "test_rmse_warm":      rmse_warm,
