@@ -12,7 +12,7 @@ import mlflow
 import torch
 
 from config.paths import ARTIFACTS_PATH, MODELS_PATH, CONFIG_PATH
-from src.model import NCF, get_device
+from src.model import get_device, load_checkpoint
 
 logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -73,19 +73,8 @@ def main():
     eval_cfg     = config["evaluation"]
     batch_size   = config["ncf"]["batch_size"]
 
-    checkpoint = torch.load(MODELS_PATH / "ncf_model.pt", map_location="cpu", weights_only=False)
-    ncf_cfg = checkpoint["ncf_config"]
-
     device = get_device()
-    model = NCF(
-        num_users=len(checkpoint["user2idx"]),
-        num_items=len(checkpoint["item2idx"]),
-        emb_size=ncf_cfg["emb_size"],
-        hidden_dims=tuple(ncf_cfg["hidden_dims"]),
-        dropout=ncf_cfg["dropout"],
-        global_mean=checkpoint["global_mean"],
-    ).to(device)
-    model.load_state_dict(checkpoint["state_dict"])
+    model, checkpoint = load_checkpoint(MODELS_PATH / "ncf_model.pt", device)
     logger.info(f"Loaded checkpoint: {len(checkpoint['user2idx']):,} users, "
                 f"{len(checkpoint['item2idx']):,} items | device: {device}")
 

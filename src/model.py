@@ -62,3 +62,24 @@ def get_device() -> torch.device:
     if torch.cuda.is_available():
         return torch.device("cuda")
     return torch.device("cpu")
+
+
+def load_checkpoint(path, device: torch.device) -> tuple["NCF", dict]:
+    """Rebuild the model from a self-contained checkpoint (see src.train).
+
+    Returns the model in eval mode on `device` and the raw checkpoint dict
+    (which also carries user2idx/item2idx/global_mean/mlflow_run_id).
+    """
+    ckpt = torch.load(path, map_location="cpu", weights_only=False)
+    cfg = ckpt["ncf_config"]
+    model = NCF(
+        num_users=len(ckpt["user2idx"]),
+        num_items=len(ckpt["item2idx"]),
+        emb_size=cfg["emb_size"],
+        hidden_dims=tuple(cfg["hidden_dims"]),
+        dropout=cfg["dropout"],
+        global_mean=ckpt["global_mean"],
+    ).to(device)
+    model.load_state_dict(ckpt["state_dict"])
+    model.eval()
+    return model, ckpt
