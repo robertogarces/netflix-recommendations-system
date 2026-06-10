@@ -11,7 +11,7 @@ import mlflow
 import torch
 from tqdm import tqdm
 
-from config.paths import ARTIFACTS_PATH, MODELS_PATH, CONFIG_PATH
+from config.paths import OUTPUTS_PATH, MODELS_PATH, CONFIG_PATH
 from src.data import load_processed, temporal_split, add_index_columns, to_tensors
 from src.model import NCF, get_device
 
@@ -61,9 +61,9 @@ def main():
     cold_fraction = test_df["is_cold_user"].mean()
     logger.info(f"Cold-user test rows: {cold_fraction:.1%}")
 
-    ARTIFACTS_PATH.mkdir(parents=True, exist_ok=True)
-    test_df.to_parquet(ARTIFACTS_PATH / "test_set.parquet", index=False)
-    logger.info("Saved held-out test set to artifacts/test_set.parquet")
+    OUTPUTS_PATH.mkdir(parents=True, exist_ok=True)
+    test_df.to_parquet(OUTPUTS_PATH / "test_set.parquet", index=False)
+    logger.info("Saved held-out test set to outputs/test_set.parquet")
 
     device = get_device()
     logger.info(f"Device: {device}")

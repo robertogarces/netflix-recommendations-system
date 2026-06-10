@@ -1,8 +1,8 @@
 """Recommendation stage: trained checkpoint → top-K movie recommendations.
 
 Two modes:
-- batch (default):       precompute top-K for every user the model knows and
-                         save artifacts/recommendations.parquet
+- batch (default):       recommend top-K for a sample of the users in Netflix's
+                         qualifying.txt and save outputs/recommendations.parquet
 - inspect (--user-id X): print top-K for a single user, enriched with titles
 
 Scoring logic is identical in both modes — only the trigger and output differ,
@@ -21,7 +21,7 @@ import polars as pl
 import pandas as pd
 import torch
 
-from config.paths import PROCESSED_DATA_PATH, RAW_DATA_PATH, ARTIFACTS_PATH, MODELS_PATH, CONFIG_PATH
+from config.paths import PROCESSED_DATA_PATH, RAW_DATA_PATH, OUTPUTS_PATH, MODELS_PATH, CONFIG_PATH
 from src.model import get_device, load_checkpoint
 
 logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(levelname)s - %(message)s")
@@ -37,6 +37,28 @@ def load_movie_titles() -> dict[int, str]:
             movie_id, _year, title = line.rstrip("\n").split(",", 2)
             titles[int(movie_id)] = title
     return titles
+
+
+def load_qualifying_users(sample_fraction: float, seed: int) -> list[int]:
+    """Unique customer_ids from Netflix's qualifying.txt, sampled for legibility.
+
+    qualifying.txt is the set Netflix released for submission: header lines
+    ("movie_id:") interleaved with "customer_id,date" rows (no ratings). We
+    only need the distinct users to recommend for.
+    """
+    customer_ids = set()
+    with open(RAW_DATA_PATH / "qualifying.txt") as f:
+        for line in f:
+            line = line.rstrip("\n")
+            if line.endswith(":"):
+                continue
+            customer_ids.add(int(line.split(",", 1)[0]))
+
+    ids = np.array(sorted(customer_ids))
+    if sample_fraction < 1.0:
+        rng = np.random.default_rng(seed)
+        ids = rng.choice(ids, size=int(len(ids) * sample_fraction), replace=False)
+    return sorted(int(c) for c in ids)
 
 
 def load_seen_items(customer_ids, user2idx: dict, item2idx: dict, device) -> dict[int, torch.Tensor]:
@@ -105,39 +127,56 @@ def cold_start_topk(model, k, num_items, device) -> tuple[np.ndarray, np.ndarray
     return top_idx.cpu().numpy(), top_scores.cpu().numpy()
 
 
-def run_batch(model, checkpoint, k, batch_size, num_items, device, rating_scale):
+def _build_records(customer_ids, rec_items, rec_scores, idx2movie, titles, k, segment) -> pd.DataFrame:
+    """Flatten (users × k) score arrays into a tidy long table."""
+    n = len(customer_ids)
+    movie_col = np.array([idx2movie[i] for i in rec_items.ravel()])
+    return pd.DataFrame({
+        "customer_id": np.repeat(customer_ids, k),
+        "rank":        np.tile(np.arange(1, k + 1), n),
+        "movie_id":    movie_col,
+        "title":       [titles.get(m, "<unknown>") for m in movie_col],
+        "score":       rec_scores.ravel(),
+        "segment":     segment,
+    })
+
+
+def run_batch(model, checkpoint, k, batch_size, num_items, device, rating_scale, sample_fraction, seed):
     user2idx, item2idx = checkpoint["user2idx"], checkpoint["item2idx"]
     idx2movie = {idx: mid for mid, idx in item2idx.items()}
     titles = load_movie_titles()
 
-    logger.info(f"Loading seen items for {len(user2idx):,} users ...")
-    seen_by_user = load_seen_items(user2idx.keys(), user2idx, item2idx, device)
+    users = load_qualifying_users(sample_fraction, seed)
+    warm = [u for u in users if u in user2idx]
+    cold = [u for u in users if u not in user2idx]
+    logger.info(f"Qualifying users sampled: {len(users):,} ({sample_fraction:.0%}) "
+                f"| warm: {len(warm):,} | cold: {len(cold):,}")
 
-    # Stable order: recommend for users in ascending index order
-    customer_ids = [cid for cid, _ in sorted(user2idx.items(), key=lambda kv: kv[1])]
-    user_indices = list(range(len(customer_ids)))
+    frames = []
 
-    logger.info(f"Scoring top-{k} recommendations ...")
-    rec_items, rec_scores = recommend_users(
-        model, user_indices, seen_by_user, k, batch_size, num_items, device, rating_scale
-    )
+    if warm:
+        logger.info(f"Loading seen items for {len(warm):,} warm users ...")
+        seen_by_user = load_seen_items(warm, user2idx, item2idx, device)
+        warm_indices = [user2idx[u] for u in warm]
+        logger.info("Scoring personalized recommendations ...")
+        rec_items, rec_scores = recommend_users(
+            model, warm_indices, seen_by_user, k, batch_size, num_items, device, rating_scale
+        )
+        frames.append(_build_records(warm, rec_items, rec_scores, idx2movie, titles, k, "warm"))
 
-    # Flatten (users × k) into a tidy long table
-    n_users = len(customer_ids)
-    customer_col = np.repeat(customer_ids, k)
-    rank_col     = np.tile(np.arange(1, k + 1), n_users)
-    movie_col    = np.array([idx2movie[i] for i in rec_items.ravel()])
-    out = pd.DataFrame({
-        "customer_id": customer_col,
-        "rank":        rank_col,
-        "movie_id":    movie_col,
-        "title":       [titles.get(m, "<unknown>") for m in movie_col],
-        "score":       rec_scores.ravel(),
-    })
+    if cold:
+        # Unknown users share one popularity list (global_mean + item_bias)
+        cold_items, cold_scores = cold_start_topk(model, k, num_items, device)
+        rec_items  = np.tile(cold_items, (len(cold), 1))
+        rec_scores = np.tile(cold_scores, (len(cold), 1))
+        frames.append(_build_records(cold, rec_items, rec_scores, idx2movie, titles, k, "cold"))
 
-    output_path = ARTIFACTS_PATH / "recommendations.parquet"
+    out = pd.concat(frames, ignore_index=True).sort_values(["customer_id", "rank"])
+
+    OUTPUTS_PATH.mkdir(parents=True, exist_ok=True)
+    output_path = OUTPUTS_PATH / "recommendations.parquet"
     out.to_parquet(output_path, index=False)
-    logger.info(f"Saved {len(out):,} recommendations ({n_users:,} users × {k}) to {output_path}")
+    logger.info(f"Saved {len(out):,} recommendations ({len(users):,} users × {k}) to {output_path}")
 
 
 def run_inspect(model, checkpoint, user_id, k, num_items, device, rating_scale):
@@ -184,7 +223,10 @@ def main():
     if args.user_id is not None:
         run_inspect(model, checkpoint, args.user_id, k, num_items, device, rating_scale)
     else:
-        run_batch(model, checkpoint, k, rec_cfg["user_batch_size"], num_items, device, rating_scale)
+        run_batch(
+            model, checkpoint, k, rec_cfg["user_batch_size"], num_items, device, rating_scale,
+            sample_fraction=rec_cfg["qualifying_sample_fraction"], seed=config["seed"],
+        )
 
 
 if __name__ == "__main__":

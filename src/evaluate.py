@@ -4,6 +4,7 @@ Loads the self-contained checkpoint produced by src.train, rebuilds the model,
 and reports test RMSE, Precision@K and Recall@K to the log and mlflow.
 """
 
+import json
 import logging
 import numpy as np
 import pandas as pd
@@ -11,7 +12,7 @@ import yaml
 import mlflow
 import torch
 
-from config.paths import ARTIFACTS_PATH, MODELS_PATH, CONFIG_PATH
+from config.paths import OUTPUTS_PATH, MODELS_PATH, CONFIG_PATH
 from src.model import get_device, load_checkpoint
 
 logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(levelname)s - %(message)s")
@@ -79,7 +80,7 @@ def main():
                 f"{len(checkpoint['item2idx']):,} items | device: {device}")
 
     # Test set already carries user_idx/item_idx from the training run
-    test_df = pd.read_parquet(ARTIFACTS_PATH / "test_set.parquet")
+    test_df = pd.read_parquet(OUTPUTS_PATH / "test_set.parquet")
     logger.info(f"Test set: {len(test_df):,} rows")
 
     users = torch.from_numpy(test_df["user_idx"].to_numpy()).long()
@@ -105,11 +106,29 @@ def main():
         user_ids[warm], true_ratings[warm], est_ratings[warm], k, threshold
     )
 
+    metrics = {
+        "test_rmse":           rmse,
+        "test_rmse_warm":      rmse_warm,
+        "test_rmse_cold":      rmse_cold,
+        "precision_at_k":      precision,
+        "precision_at_k_warm": precision_warm,
+        "recall_at_k":         recall,
+        "recall_at_k_warm":    recall_warm,
+    }
+
     logger.info(f"Test RMSE:      {rmse:.4f}")
     logger.info(f"  warm users:   {rmse_warm:.4f}  ({warm.mean():.0%} of rows)")
     logger.info(f"  cold users:   {rmse_cold:.4f}  ({(~warm).mean():.0%} of rows)")
     logger.info(f"Precision@{k}:   {precision:.4f}  (warm: {precision_warm:.4f})")
     logger.info(f"Recall@{k}:      {recall:.4f}  (warm: {recall_warm:.4f})")
+
+    # Persist a readable report for the dashboard (alongside mlflow)
+    report = {**metrics, "k": k, "threshold": threshold,
+              "warm_fraction": float(warm.mean()), "n_test_rows": int(len(test_df))}
+    OUTPUTS_PATH.mkdir(parents=True, exist_ok=True)
+    with open(OUTPUTS_PATH / "metrics.json", "w") as f:
+        json.dump(report, f, indent=2)
+    logger.info("Saved metrics to outputs/metrics.json")
 
     # Attach test metrics to the training run that produced this checkpoint,
     # so one mlflow run holds the full story: params, training curves, test.
@@ -119,15 +138,7 @@ def main():
     with mlflow.start_run(run_id=run_id, run_name=None if run_id else "NCF_Evaluation"):
         # Tags (not params) — re-evaluating with a different k must not clash
         mlflow.set_tags({"eval_k": k, "eval_threshold": threshold})
-        mlflow.log_metrics({
-            "test_rmse":           rmse,
-            "test_rmse_warm":      rmse_warm,
-            "test_rmse_cold":      rmse_cold,
-            "precision_at_k":      precision,
-            "precision_at_k_warm": precision_warm,
-            "recall_at_k":         recall,
-            "recall_at_k_warm":    recall_warm,
-        })
+        mlflow.log_metrics(metrics)
 
 
 if __name__ == "__main__":
