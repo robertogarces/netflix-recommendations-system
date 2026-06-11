@@ -26,30 +26,57 @@ def precision_recall_at_k(
     k: int = 10,
     threshold: float = 4.0,
 ) -> tuple[float, float]:
-    """
-    Mean Precision@K and Recall@K across users, fully vectorized.
+    """Mean Precision@K and Recall@K across users, fully vectorized.
 
-    Users with no relevant items (no true rating >= threshold) are excluded,
-    since recall is undefined for them.
+    Precision@K: of the top-K items we recommended, what fraction were relevant?
+                 = (relevant items in top-K) / K
+
+    Recall@K:    of all relevant items the user has in the test set, what fraction
+                 did we surface in the top-K?
+                 = (relevant items in top-K) / (total relevant items for that user)
+
+    Users with no relevant items (no true rating >= threshold) are excluded from
+    recall because recall would be 0/0 (undefined denominator). They are also
+    excluded from precision to keep both metrics on the same set of users.
+
+    Vectorized strategy:
+    Instead of a Python loop over each user, we sort the entire array so each
+    user's items are contiguous and ordered by predicted score, then use
+    np.add.reduceat to sum within each user's block — equivalent to a SQL
+    GROUP BY SUM but in one NumPy call.
     """
-    # Sort by user, then by estimated rating descending within each user
+    # np.lexsort sorts by the LAST key first (primary), then earlier keys (secondary).
+    # Primary sort:   user_ids ascending  → groups all items for the same user together
+    # Secondary sort: -est_ratings        → within each user, highest predicted score first
     order  = np.lexsort((-est_ratings, user_ids))
     uids   = user_ids[order]
     true_r = true_ratings[order]
 
-    # Group boundaries per user (uids is sorted, so start indices are increasing)
+    # np.unique with return_index=True gives the position in `uids` where each
+    # unique user first appears — these are the segment boundaries for reduceat.
+    # counts tells us how many items each user has (used to compute per-item rank).
     _, start_idx, counts = np.unique(uids, return_index=True, return_counts=True)
 
+    # A rating is "relevant" if it meets or exceeds the threshold (e.g. 4.5 stars).
     relevant = true_r >= threshold
-    rank     = np.arange(len(uids)) - np.repeat(start_idx, counts)  # 0-based rank within user
-    in_top_k = rank < k
 
-    n_relevant       = np.add.reduceat(relevant, start_idx)
-    n_relevant_top_k = np.add.reduceat(relevant & in_top_k, start_idx)
+    # Compute each row's 0-based rank within its user's block.
+    # np.repeat(start_idx, counts) repeats each user's start position once per item
+    # that belongs to that user. Subtracting from the global index gives local rank.
+    # Example: user A has items at global positions [3,4,5] → ranks [0,1,2]
+    rank     = np.arange(len(uids)) - np.repeat(start_idx, counts)
+    in_top_k = rank < k  # True for positions 0..k-1 within each user (the top-K)
 
+    # np.add.reduceat(arr, indices): sum arr in non-overlapping segments defined by
+    # indices. It's equivalent to [arr[s:e].sum() for s,e in zip(indices, indices[1:]+[len])].
+    # Much faster than a Python loop because it's a single C-level pass over the array.
+    n_relevant       = np.add.reduceat(relevant,            start_idx)  # total relevant per user
+    n_relevant_top_k = np.add.reduceat(relevant & in_top_k, start_idx)  # relevant hits in top-K
+
+    # Exclude users with no relevant items (recall is undefined for them).
     mask = n_relevant > 0
-    precision = n_relevant_top_k[mask] / k
-    recall    = n_relevant_top_k[mask] / n_relevant[mask]
+    precision = n_relevant_top_k[mask] / k                       # hits / K
+    recall    = n_relevant_top_k[mask] / n_relevant[mask]        # hits / total relevant
 
     return float(precision.mean()), float(recall.mean())
 

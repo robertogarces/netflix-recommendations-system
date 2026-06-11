@@ -88,40 +88,72 @@ def load_seen_items(customer_ids, user2idx: dict, item2idx: dict, device) -> dic
 def recommend_users(
     model, user_indices, seen_by_user, k, batch_size, num_items, device, rating_scale
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Score the full catalog for each user, mask seen items, return top-K.
+    """Score the full item catalog for each user, mask seen items, return top-K.
 
-    At ~17.7k items, scoring the whole catalog per user is cheap; two-stage
-    candidate generation only pays off at millions of items.
+    Why score the entire catalog?
+    At ~17.7k items (post-filtering), one forward pass per user costs 17.7k
+    dot products — negligible on MPS. Two-stage retrieval (ANN + re-rank) only
+    pays off at millions of items where brute-force scoring becomes too slow.
 
-    Returns (item_idx, scores), both shaped (len(user_indices), k).
+    Batching strategy (users, not items):
+    We process `batch_size` users at a time to bound memory. For each batch of
+    b users, we build flat tensors of size (b × num_items,) by interleaving
+    user indices and repeating item indices, run one forward pass, then reshape
+    back to (b, num_items) to apply masking and top-K selection.
+
+    Returns:
+        rec_items:  int array of shape (num_users, k) — item indices
+        rec_scores: float array of shape (num_users, k) — predicted ratings
     """
+    # A tensor [0, 1, ..., num_items-1] on the device — the full item catalog.
     item_ids = torch.arange(num_items, device=device)
     rec_items, rec_scores = [], []
 
     for start in range(0, len(user_indices), batch_size):
-        batch = user_indices[start:start + batch_size]
+        batch = user_indices[start:start + batch_size]  # list of b user indices
         b = len(batch)
 
-        users = torch.tensor(batch, device=device).repeat_interleave(num_items)
-        items = item_ids.repeat(b)
+        # Build flat (b * num_items,) input tensors for one batched forward pass.
+        # repeat_interleave([u1,u2], n) → [u1,u1,...(n),u2,u2,...(n)]
+        #   each user is paired with all num_items items in sequence
+        # repeat([0,1,...,n-1], b)      → [0,1,...,n-1, 0,1,...,n-1, ...]
+        #   the item list repeats once per user
+        users  = torch.tensor(batch, device=device).repeat_interleave(num_items)
+        items  = item_ids.repeat(b)
+
+        # One forward pass scores all (user, item) pairs; reshape to (b, num_items)
+        # so row i holds all item scores for user batch[i].
         scores = model(users, items).clamp(*rating_scale).view(b, num_items)
 
+        # Mask items the user has already rated by setting their score to -inf.
+        # torch.topk will never return -inf entries, so they are effectively excluded.
+        # seen_by_user[uidx] is a LongTensor of item indices (from load_seen_items).
         for row, uidx in enumerate(batch):
             seen = seen_by_user.get(int(uidx))
             if seen is not None:
                 scores[row, seen] = float("-inf")
 
+        # torch.topk returns (values, indices), both shape (b, k), along dim=1.
         top_scores, top_idx = torch.topk(scores, k, dim=1)
         rec_items.append(top_idx.cpu().numpy())
         rec_scores.append(top_scores.cpu().numpy())
 
+    # Stack results from all batches: (total_users, k)
     return np.concatenate(rec_items), np.concatenate(rec_scores)
 
 
 @torch.no_grad()
 def cold_start_topk(model, k, num_items, device) -> tuple[np.ndarray, np.ndarray]:
-    """Popularity ranking for an unknown user: global_mean + item_bias."""
+    """Popularity ranking for users not in the checkpoint vocabulary.
+
+    For a user the model has never seen, we have no user embedding and no user
+    bias. The best we can do is predict global_mean + item_bias for every item,
+    which reduces to a popularity ranking: items that everyone tends to rate
+    highly float to the top. This is equivalent to what the model would predict
+    if it knew nothing about the user.
+    """
     item_ids = torch.arange(num_items, device=device)
+    # item_bias returns shape (num_items, 1); squeeze(-1) flattens to (num_items,)
     scores = model.global_mean + model.item_bias(item_ids).squeeze(-1)
     top_scores, top_idx = torch.topk(scores, k)
     return top_idx.cpu().numpy(), top_scores.cpu().numpy()

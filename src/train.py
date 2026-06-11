@@ -20,14 +20,26 @@ logger = logging.getLogger(__name__)
 
 
 def validation_rmse(model, users, items, ratings, batch_size, rating_scale) -> float:
+    """Compute RMSE on a dataset in mini-batches, accumulating error on the device.
+
+    Why accumulate on-device and call .item() only once?
+    On MPS and CUDA, each .item() (or any operation that reads a tensor back to
+    the CPU) forces a host-device synchronization — the CPU blocks until the GPU
+    catches up. Calling it once per batch would turn the validation loop into a
+    chain of sync points and kill throughput. Instead we keep sq_error as a
+    scalar tensor on the device and sync only at the end.
+
+    torch.zeros(()) creates a 0-dimensional (scalar) tensor — no batch dimension,
+    just a single number that lives on the device.
+    """
     model.eval()
-    sq_error = torch.zeros((), device=users.device)
+    sq_error = torch.zeros((), device=users.device)  # scalar on device, avoids per-batch sync
     with torch.no_grad():
         for start in range(0, len(users), batch_size):
             end = start + batch_size
             est = model(users[start:end], items[start:end]).clamp(*rating_scale)
             sq_error += torch.sum((est - ratings[start:end]) ** 2)
-    return (sq_error.item() / len(users)) ** 0.5
+    return (sq_error.item() / len(users)) ** 0.5  # single host-device sync here
 
 
 def main():
@@ -111,9 +123,13 @@ def main():
         MODELS_PATH.mkdir(parents=True, exist_ok=True)
 
         def save_checkpoint():
-            # Self-contained: everything evaluate/inference needs to rebuild
-            # the exact model and map raw IDs to embedding indices. The mlflow
-            # run id lets evaluate attach its test metrics to this run.
+            # Self-contained bundle: every artifact evaluate.py and recommend.py
+            # need to reconstruct the exact model without re-running preprocessing.
+            # - state_dict:    the trained weights
+            # - user2idx/item2idx: mapping from raw IDs to embedding indices
+            # - global_mean:   frozen scalar baked into the model buffer
+            # - ncf_config:    hyperparams needed to rebuild the architecture
+            # - mlflow_run_id: lets evaluate.py log test metrics into THIS run
             torch.save({
                 "state_dict":     model.state_dict(),
                 "user2idx":       user2idx,
@@ -126,20 +142,30 @@ def main():
         n_train = len(train_users)
         for epoch in range(1, ncf_cfg["epochs"] + 1):
             model.train()
+            # Shuffle training indices each epoch so the model doesn't memorize
+            # batch order. randperm on-device avoids a CPU→device copy per step.
             perm = torch.randperm(n_train, device=device)
-            # Loss accumulates on device; .item() only once per epoch to avoid
-            # forcing a host-device sync on every batch.
+
+            # Accumulate squared error as a device-resident scalar (see validation_rmse
+            # for why we avoid per-batch .item() calls).
             train_sq_error = torch.zeros((), device=device)
             for start in tqdm(range(0, n_train, batch_size), desc=f"Epoch {epoch}/{ncf_cfg['epochs']}"):
-                b = perm[start:start + batch_size]
+                b = perm[start:start + batch_size]  # shuffled indices for this mini-batch
+
+                # MSELoss returns the *mean* squared error over the batch.
+                # We multiply back by len(b) to accumulate the *sum*, so we can
+                # compute a correct epoch-level RMSE at the end.
                 loss = loss_fn(model(train_users[b], train_items[b]), train_ratings[b])
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
-                train_sq_error += loss.detach() * len(b)
+                train_sq_error += loss.detach() * len(b)  # sum, not mean
             train_rmse = (train_sq_error.item() / n_train) ** 0.5
 
             val_rmse = validation_rmse(model, val_users, val_items, val_ratings, batch_size, rating_scale)
+
+            # ReduceLROnPlateau: if val_rmse stops improving, halve the learning rate.
+            # This lets the model make large updates early and fine-tune later.
             scheduler.step(val_rmse)
 
             lr = optimizer.param_groups[0]["lr"]
@@ -148,10 +174,12 @@ def main():
 
             if val_rmse < best_val_rmse:
                 best_val_rmse = val_rmse
-                save_checkpoint()
+                save_checkpoint()   # overwrite checkpoint only when val improves
                 no_improve = 0
             else:
                 no_improve += 1
+                # Early stopping: if val_rmse hasn't improved for `patience` epochs,
+                # the best checkpoint is already saved — stop to avoid overfitting.
                 if no_improve >= patience:
                     logger.info(f"Early stopping at epoch {epoch}")
                     break
