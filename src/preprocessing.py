@@ -5,7 +5,7 @@ Outputs:
 - artifacts/valid_users.pkl / valid_movies.pkl — the data contract: IDs that
   survived filtering, used to reject unknown IDs at inference time
 
-Index mappings (user_idx, item_idx) are NOT built here — each training run
+Index mapings (user_idx, item_idx) are NOT built here — each training run
 builds compact mappings from its own (possibly sampled) data and ships them
 inside the checkpoint. See src.data.add_index_columns for the rationale.
 """
@@ -27,7 +27,7 @@ def parse_raw_file(path) -> pl.DataFrame:
     The raw file format mixes two line types with no structural separator:
 
         123:                          ← movie header: declares movie_id for the lines below
-        1488844,3,2005-09-06         ← rating: customer_id, rating, date
+        1488844,3,2005-09-06          ← rating: customer_id, rating, date
         822109,5,2005-05-13
         ...
         124:                          ← next movie block starts
@@ -94,6 +94,8 @@ def parse_raw_file(path) -> pl.DataFrame:
 
 
 def parse_raw_files(num_files: int) -> pl.DataFrame:
+
+    # Parse each raw file into a DataFrame, then concatenate them all together.
     chunks = []
     for i in range(1, num_files + 1):
         path = RAW_DATA_PATH / f"combined_data_{i}.txt"

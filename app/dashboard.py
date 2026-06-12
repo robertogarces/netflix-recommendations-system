@@ -1,11 +1,11 @@
 """Streamlit dashboard for the NCF recommender.
 
-Two panels:
-- User Explorer:     type a customer_id → live top-K recommendations, warm/cold
-                     status, and the user's own rating history for context.
+Single page with two sections:
 - Model Performance: test metrics from the latest evaluate run (outputs/metrics.json).
+- User Explorer:     type a customer_id -> live top-K recommendations, warm/cold
+                     status, and the user's own rating history for context.
 
-Live scoring reuses src.recommend — the dashboard is just another wrapper over
+Live scoring reuses src.recommend -- the dashboard is just another wrapper over
 the same core, exactly like the CLI and a future API would be.
 
 Run:  streamlit run app/dashboard.py
@@ -28,7 +28,7 @@ from config.paths import PROCESSED_DATA_PATH, MODELS_PATH, OUTPUTS_PATH, CONFIG_
 from src.model import get_device, load_checkpoint
 from src.recommend import recommend_single_user, load_movie_titles
 
-st.set_page_config(page_title="Netflix NCF Recommender", page_icon="🎬", layout="wide")
+st.set_page_config(page_title="Netflix NCF Recommender", page_icon="\U0001f3ac", layout="wide")
 
 
 @st.cache_resource
@@ -79,61 +79,60 @@ k_default    = config["recommend"]["top_k"]
 rating_scale = tuple(config["data"]["rating_scale"])
 num_items    = len(checkpoint["item2idx"])
 
-st.title("🎬 Netflix Recommender — Neural Collaborative Filtering")
+st.title("\U0001f3ac Netflix Recommender — Neural Collaborative Filtering")
 st.caption(f"Model knows {len(checkpoint['user2idx']):,} users and {num_items:,} movies · device: {device.type}")
 
-tab_explorer, tab_metrics = st.tabs(["🔍 User Explorer", "📊 Model Performance"])
-
-with tab_explorer:
-    col_id, col_k = st.columns([3, 1])
-    user_id = col_id.number_input(
-        "Customer ID", min_value=1, value=int(sample_warm_user), step=1,
-        help="A warm user was seen in training; an unknown user gets the cold-start fallback.",
+# --- Model Performance ---
+st.subheader("\U0001f4ca Model Performance")
+metrics = load_metrics()
+if metrics is None:
+    st.warning("No metrics yet. Run `python -m src.evaluate` to generate outputs/metrics.json.")
+else:
+    c1, c2, c3, c4, c5 = st.columns(5)
+    c1.metric("RMSE Overall", f"{metrics['test_rmse']:.4f}")
+    c2.metric("RMSE Warm", f"{metrics['test_rmse_warm']:.4f}")
+    c3.metric("RMSE Cold", f"{metrics['test_rmse_cold']:.4f}")
+    c4.metric("Precision@K", f"{metrics['precision_at_k']:.4f}", help=f"warm: {metrics['precision_at_k_warm']:.4f}")
+    c5.metric("Recall@K", f"{metrics['recall_at_k']:.4f}", help=f"warm: {metrics['recall_at_k_warm']:.4f}")
+    st.caption(
+        f"K={metrics['k']} · relevance ≥ {metrics['threshold']} · "
+        f"{metrics['warm_fraction']:.0%} of {metrics['n_test_rows']:,} test rows are warm users."
     )
-    k = col_k.number_input("How many", min_value=1, max_value=50, value=k_default, step=1)
 
-    recs, segment = recommend_single_user(
-        model, checkpoint, int(user_id), int(k), num_items, device, rating_scale
-    )
+st.divider()
 
-    if segment == "warm":
-        st.success("**Warm user** — personalized from the user's learned embedding.")
+# --- User Explorer ---
+st.subheader("\U0001f50d User Explorer")
+col_id, col_k = st.columns([3, 1])
+user_id = col_id.number_input(
+    "Customer ID", min_value=1, value=int(sample_warm_user), step=1,
+    help="A warm user was seen in training; an unknown user gets the cold-start fallback.",
+)
+k = col_k.number_input("How many", min_value=1, max_value=50, value=k_default, step=1)
+
+recs, segment = recommend_single_user(
+    model, checkpoint, int(user_id), int(k), num_items, device, rating_scale
+)
+
+if segment == "warm":
+    st.success("**Warm user** — personalized from the user's learned embedding.")
+else:
+    st.warning("**Cold user** — not in the model's vocabulary; popularity fallback (global mean + item bias).")
+
+history = get_user_history(int(user_id))
+if not history.empty:
+    history["date"] = pd.to_datetime(history["date"]).dt.strftime("%d/%B/%Y")
+history_caption = f"{len(history):,} ratings · showing highest-rated" if not history.empty else "no ratings found"
+
+left, right = st.columns(2)
+with left:
+    st.markdown(f"**Top-{int(k)} recommendations**")
+    st.caption(f"{int(k)} personalized results")
+    st.dataframe(recs[["rank", "title", "score"]], hide_index=True, width="stretch")
+with right:
+    st.markdown("**User's rating history**")
+    st.caption(history_caption)
+    if history.empty:
+        st.info("No rating history for this user in the processed dataset.")
     else:
-        st.warning("**Cold user** — not in the model's vocabulary; popularity fallback (global mean + item bias).")
-
-    left, right = st.columns(2)
-    with left:
-        st.subheader(f"Top-{int(k)} recommendations")
-        st.dataframe(recs[["rank", "title", "score"]], hide_index=True, width="stretch")
-    with right:
-        st.subheader("User's rating history")
-        history = get_user_history(int(user_id))
-        if history.empty:
-            st.info("No rating history for this user in the processed dataset.")
-        else:
-            st.caption(f"{len(history):,} ratings · showing highest-rated")
-            st.dataframe(history[["title", "rating", "date"]].head(15), hide_index=True, width="stretch")
-
-with tab_metrics:
-    metrics = load_metrics()
-    if metrics is None:
-        st.warning("No metrics yet. Run `python -m src.evaluate` to generate outputs/metrics.json.")
-    else:
-        st.subheader("Test RMSE")
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Overall", f"{metrics['test_rmse']:.4f}")
-        c2.metric("Warm users", f"{metrics['test_rmse_warm']:.4f}")
-        c3.metric("Cold users", f"{metrics['test_rmse_cold']:.4f}")
-        st.caption(
-            f"{metrics['warm_fraction']:.0%} of {metrics['n_test_rows']:,} test rows are warm users. "
-            "Warm RMSE is what model iterations can move; cold is a collaborative-filtering floor."
-        )
-        st.bar_chart(pd.DataFrame(
-            {"RMSE": [metrics["test_rmse_warm"], metrics["test_rmse_cold"]]},
-            index=["warm", "cold"],
-        ))
-
-        st.subheader(f"Ranking @ {metrics['k']} (relevance ≥ {metrics['threshold']})")
-        c4, c5 = st.columns(2)
-        c4.metric("Precision@K", f"{metrics['precision_at_k']:.4f}", help=f"warm: {metrics['precision_at_k_warm']:.4f}")
-        c5.metric("Recall@K", f"{metrics['recall_at_k']:.4f}", help=f"warm: {metrics['recall_at_k_warm']:.4f}")
+        st.dataframe(history[["title", "rating", "date"]].head(15), hide_index=True, width="stretch")
