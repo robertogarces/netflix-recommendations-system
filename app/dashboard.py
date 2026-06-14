@@ -1,4 +1,4 @@
-"""Streamlit dashboard for the NCF recommender.
+"""Streamlit dashboard for the SVD recommender.
 
 Single page with two sections:
 - Model Performance: test metrics from the latest evaluate run (outputs/metrics.json).
@@ -25,18 +25,19 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from config.paths import PROCESSED_DATA_PATH, MODELS_PATH, OUTPUTS_PATH, CONFIG_PATH
-from src.model import get_device, load_checkpoint
+from src.model import load_model as load_svd_model, item_raw_ids
 from src.recommend import recommend_single_user, load_movie_titles
 
-st.set_page_config(page_title="Netflix NCF Recommender", page_icon="\U0001f3ac", layout="wide")
+st.set_page_config(page_title="Netflix SVD Recommender", page_icon="\U0001f3ac", layout="wide")
 
 
 @st.cache_resource
 def load_model():
-    device = get_device()
-    model, checkpoint = load_checkpoint(MODELS_PATH / "ncf_model.pt", device)
-    sample_warm_user = min(checkpoint["user2idx"])  # guarantees the default view is personalized
-    return model, checkpoint, device, sample_warm_user
+    algo = load_svd_model(MODELS_PATH / "svd_model.pkl")
+    titles = load_movie_titles()
+    idx2raw = item_raw_ids(algo)                       # cached: inner item idx -> movie_id
+    sample_warm_user = min(algo.trainset._raw2inner_id_users)  # default view is personalized
+    return algo, titles, idx2raw, sample_warm_user
 
 
 @st.cache_data
@@ -68,19 +69,20 @@ def get_user_history(user_id: int) -> pd.DataFrame:
 
 
 # --- Shared resources ---
+config       = load_config_cached()
+
 try:
-    model, checkpoint, device, sample_warm_user = load_model()
+    algo, titles, idx2raw, sample_warm_user = load_model()
 except FileNotFoundError:
-    st.error("No checkpoint at models/ncf_model.pt. Run `python -m src.train` first.")
+    st.error("No model at models/svd_model.pkl. Run `python -m src.train` first.")
     st.stop()
 
-config       = load_config_cached()
 k_default    = config["recommend"]["top_k"]
 rating_scale = tuple(config["data"]["rating_scale"])
-num_items    = len(checkpoint["item2idx"])
+ts = algo.trainset
 
-st.title("\U0001f3ac Netflix Recommender — Neural Collaborative Filtering")
-st.caption(f"Model knows {len(checkpoint['user2idx']):,} users and {num_items:,} movies · device: {device.type}")
+st.title("\U0001f3ac Netflix Recommender — SVD Matrix Factorization (Surprise)")
+st.caption(f"Model knows {ts.n_users:,} users and {ts.n_items:,} movies")
 
 # --- Model Performance ---
 st.subheader("\U0001f4ca Model Performance")
@@ -111,11 +113,11 @@ user_id = col_id.number_input(
 k = col_k.number_input("How many", min_value=1, max_value=50, value=k_default, step=1)
 
 recs, segment = recommend_single_user(
-    model, checkpoint, int(user_id), int(k), num_items, device, rating_scale
+    algo, int(user_id), int(k), rating_scale, titles=titles, idx2raw=idx2raw
 )
 
 if segment == "warm":
-    st.success("**Warm user** — personalized from the user's learned embedding.")
+    st.success("**Warm user** — personalized from the user's learned factor vector.")
 else:
     st.warning("**Cold user** — not in the model's vocabulary; popularity fallback (global mean + item bias).")
 

@@ -4,10 +4,22 @@ data:
   num_raw_files: 4
   rating_scale: [1.0, 5.0]
 
+preprocessing:
+  min_movie_ratings: 50
+  min_user_ratings: 10
+
 training:
-  data_sample_fraction: 0.1
-  val_size: 0.1
-  test_size: 0.2
+  data_sample_fraction: 0.1   # fraction of users sampled (each keeps full history)
+  test_size: 0.2              # temporal hold-out fraction (newest ratings)
+
+# Surprise SVD (Funk matrix factorization) hyperparameters.
+# Surprise runs plain SGD for a fixed n_epochs; lr_all / reg_all are the global
+# learning rate and L2 regularization applied to all factors and biases.
+svd:
+  n_factors: 100
+  n_epochs: 20
+  lr_all: 0.005
+  reg_all: 0.02
 
 evaluation:
   top_n: 10
@@ -15,19 +27,4 @@ evaluation:
 
 recommend:
   top_k: 10
-  user_batch_size: 128            # users scored per forward pass (memory vs speed on 8GB)
   qualifying_sample_fraction: 0.01  # fraction of qualifying.txt users to recommend for (legibility)
-
-preprocessing:
-  min_movie_ratings: 50
-  min_user_ratings: 10
-
-ncf:
-  emb_size: 64
-  hidden_dims: [64, 32]
-  dropout: 0.3
-  batch_size: 32768
-  epochs: 15
-  early_stopping_patience: 3
-  lr: 0.002
-  weight_decay: 0.00001

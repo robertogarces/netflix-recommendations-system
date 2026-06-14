@@ -1,13 +1,14 @@
 {
-  "test_rmse": 1.0264087915420532,
-  "test_rmse_warm": 0.9380124807357788,
-  "test_rmse_cold": 1.100132942199707,
-  "precision_at_k": 0.41903853910747674,
-  "precision_at_k_warm": 0.38081917541391624,
-  "recall_at_k": 0.5530302125120586,
-  "recall_at_k_warm": 0.6364536173267874,
+  "model_type": "svd",
+  "test_rmse": 0.9958042861278674,
+  "test_rmse_warm": 0.9247640561808472,
+  "test_rmse_cold": 1.0825011410871326,
+  "precision_at_k": 0.42673902680503095,
+  "precision_at_k_warm": 0.3951934631098294,
+  "recall_at_k": 0.5655366591829307,
+  "recall_at_k_warm": 0.6383317714253844,
   "k": 10,
   "threshold": 4.5,
-  "warm_fraction": 0.47447058487265004,
+  "warm_fraction": 0.5690810834663421,
   "n_test_rows": 1994229
 }

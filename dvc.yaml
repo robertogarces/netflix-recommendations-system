@@ -3,52 +3,49 @@ stages:
     cmd: python -m src.preprocessing
     deps:
       - src/preprocessing.py
-      - utils/files_management.py
-      - utils/data_processing.py
-      - utils/config_loader.py
       - config/paths.py
-      - data/raw
       - config/settings.yaml
+      - data/raw
     outs:
       - data/processed/processed_data.parquet
       - artifacts/valid_users.pkl
       - artifacts/valid_movies.pkl
 
   train:
-    cmd: python -m src.training
+    cmd: python -m src.train
     deps:
-      - src/training.py
-      - src/ncf_model.py
-      - src/svd_model.py
-      - utils/metrics.py
-      - utils/data_split.py
-      - utils/config_loader.py
+      - src/train.py
+      - src/model.py
       - config/paths.py
       - config/settings.yaml
-      - config/best_params.yaml
       - data/processed/processed_data.parquet
     outs:
-      # Conditional dependencies. Change if model is switched to SVD
-      - models/ncf_model.pt
-      - artifacts/user2idx.pkl
-      - artifacts/item2idx.pkl
+      - models/svd_model.pkl
+      - outputs/test_set.parquet
 
-  predict:
-    cmd: python -m src.predictions
+  evaluate:
+    cmd: python -m src.evaluate
     deps:
-      - src/predictions.py
-      - utils/files_management.py
-      - utils/data_processing.py
+      - src/evaluate.py
+      - src/model.py
       - config/paths.py
       - config/settings.yaml
-      - data/raw/qualifying.txt
-      - artifacts/valid_users.pkl
-      - artifacts/valid_movies.pkl
-      - data/raw/movie_titles_fixed.csv
-      # Conditional dependencies. Change if model is switched to SVD
-      - models/ncf_model.pt
-      - artifacts/user2idx.pkl
-      - artifacts/item2idx.pkl
-    outs:
-      - data/final/predictions.csv
+      - models/svd_model.pkl
+      - outputs/test_set.parquet
+    metrics:
+      - outputs/metrics.json:
+          cache: false
 
+  recommend:
+    cmd: python -m src.recommend
+    deps:
+      - src/recommend.py
+      - src/model.py
+      - config/paths.py
+      - config/settings.yaml
+      - models/svd_model.pkl
+      - data/processed/processed_data.parquet
+      - data/raw/qualifying.txt
+      - data/raw/movie_titles.csv
+    outs:
+      - outputs/recommendations.parquet

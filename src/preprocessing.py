@@ -5,9 +5,8 @@ Outputs:
 - artifacts/valid_users.pkl / valid_movies.pkl — the data contract: IDs that
   survived filtering, used to reject unknown IDs at inference time
 
-Index mapings (user_idx, item_idx) are NOT built here — each training run
-builds compact mappings from its own (possibly sampled) data and ships them
-inside the checkpoint. See src.data.add_index_columns for the rationale.
+Raw customer/movie IDs are kept as-is here; Surprise builds its own internal
+index mappings from the training data when the model is fit (see src.train).
 """
 
 import logging

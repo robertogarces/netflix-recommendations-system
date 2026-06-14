@@ -1,16 +1,16 @@
-"""Recommendation stage: trained checkpoint → top-K movie recommendations.
+"""Recommendation stage: fitted SVD model → top-K movie recommendations.
 
 Two modes:
 - batch (default):       recommend top-K for a sample of the users in Netflix's
                          qualifying.txt and save outputs/recommendations.parquet
 - inspect (--user-id X): print top-K for a single user, enriched with titles
 
-Scoring logic is identical in both modes — only the trigger and output differ,
-so an online API would be a thin wrapper over `recommend_users`.
+Scoring is identical in both modes — only the trigger and output differ, so an
+online API would be a thin wrapper over `recommend_single_user`.
 
 Items the user has already rated are filtered out. Cold users (not in the
-checkpoint vocabulary) fall back to popularity ranking by learned item bias —
-exactly what the model predicts for an unknown user.
+trainset) fall back to popularity ranking by learned item bias — exactly what
+the model predicts for an unknown user.
 """
 
 import argparse
@@ -19,10 +19,9 @@ import yaml
 import numpy as np
 import polars as pl
 import pandas as pd
-import torch
 
 from config.paths import PROCESSED_DATA_PATH, RAW_DATA_PATH, OUTPUTS_PATH, MODELS_PATH, CONFIG_PATH
-from src.model import get_device, load_checkpoint
+from src.model import load_model, score_all_items, item_raw_ids
 
 logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -42,9 +41,8 @@ def load_movie_titles() -> dict[int, str]:
 def load_qualifying_users(sample_fraction: float, seed: int) -> list[int]:
     """Unique customer_ids from Netflix's qualifying.txt, sampled for legibility.
 
-    qualifying.txt is the set Netflix released for submission: header lines
-    ("movie_id:") interleaved with "customer_id,date" rows (no ratings). We
-    only need the distinct users to recommend for.
+    qualifying.txt interleaves "movie_id:" header lines with "customer_id,date"
+    rows (no ratings). We only need the distinct users to recommend for.
     """
     customer_ids = set()
     with open(RAW_DATA_PATH / "qualifying.txt") as f:
@@ -61,190 +59,104 @@ def load_qualifying_users(sample_fraction: float, seed: int) -> list[int]:
     return sorted(int(c) for c in ids)
 
 
-def load_seen_items(customer_ids, user2idx: dict, item2idx: dict, device) -> dict[int, torch.Tensor]:
-    """Map each user's rated movies to a tensor of item indices, for filtering.
+def load_seen_items(customer_ids) -> dict[int, set]:
+    """Map each user to the set of movie_ids they have already rated, for filtering.
 
-    Lazily scans the processed parquet and keeps only the requested users, so
-    the inspect mode (one user) stays cheap and batch mode pays once.
+    Lazily scans the processed parquet and keeps only the requested users, so the
+    inspect mode (one user) stays cheap and batch mode pays the scan once.
     """
     seen = (
         pl.scan_parquet(PROCESSED_DATA_PATH / "processed_data.parquet")
         .filter(pl.col("customer_id").is_in(list(customer_ids)))
         .select(["customer_id", "movie_id"])
         .collect()
-        .to_pandas()
     )
-    seen["user_idx"] = seen["customer_id"].map(user2idx)
-    seen["item_idx"] = seen["movie_id"].map(item2idx)
-    seen = seen.dropna(subset=["user_idx", "item_idx"])
-
     return {
-        int(uidx): torch.tensor(group.to_numpy(), dtype=torch.long, device=device)
-        for uidx, group in seen.groupby("user_idx")["item_idx"]
+        cid: set(group["movie_id"].to_list())
+        for cid, group in seen.group_by("customer_id")
     }
 
 
-@torch.no_grad()
-def recommend_users(
-    model, user_indices, seen_by_user, k, batch_size, num_items, device, rating_scale
-) -> tuple[np.ndarray, np.ndarray]:
-    """Score the full item catalog for each user, mask seen items, return top-K.
+def top_k_for_user(algo, user_id, k, seen, idx2raw, raw2inner, rating_scale):
+    """Top-K (movie_ids, scores, segment) for one user, masking already-seen items."""
+    scores, segment = score_all_items(algo, user_id, rating_scale)  # by inner item id
 
-    Why score the entire catalog?
-    At ~17.7k items (post-filtering), one forward pass per user costs 17.7k
-    dot products — negligible on MPS. Two-stage retrieval (ANN + re-rank) only
-    pays off at millions of items where brute-force scoring becomes too slow.
+    # Mask items the user already rated by pushing their score to -inf.
+    if seen:
+        inner = [raw2inner[m] for m in seen if m in raw2inner]
+        if inner:
+            scores[inner] = -np.inf
 
-    Batching strategy (users, not items):
-    We process `batch_size` users at a time to bound memory. For each batch of
-    b users, we build flat tensors of size (b × num_items,) by interleaving
-    user indices and repeating item indices, run one forward pass, then reshape
-    back to (b, num_items) to apply masking and top-K selection.
-
-    Returns:
-        rec_items:  int array of shape (num_users, k) — item indices
-        rec_scores: float array of shape (num_users, k) — predicted ratings
-    """
-    # A tensor [0, 1, ..., num_items-1] on the device — the full item catalog.
-    item_ids = torch.arange(num_items, device=device)
-    rec_items, rec_scores = [], []
-
-    for start in range(0, len(user_indices), batch_size):
-        batch = user_indices[start:start + batch_size]  # list of b user indices
-        b = len(batch)
-
-        # Build flat (b * num_items,) input tensors for one batched forward pass.
-        # repeat_interleave([u1,u2], n) → [u1,u1,...(n),u2,u2,...(n)]
-        #   each user is paired with all num_items items in sequence
-        # repeat([0,1,...,n-1], b)      → [0,1,...,n-1, 0,1,...,n-1, ...]
-        #   the item list repeats once per user
-        users  = torch.tensor(batch, device=device).repeat_interleave(num_items)
-        items  = item_ids.repeat(b)
-
-        # One forward pass scores all (user, item) pairs; reshape to (b, num_items)
-        # so row i holds all item scores for user batch[i].
-        scores = model(users, items).clamp(*rating_scale).view(b, num_items)
-
-        # Mask items the user has already rated by setting their score to -inf.
-        # torch.topk will never return -inf entries, so they are effectively excluded.
-        # seen_by_user[uidx] is a LongTensor of item indices (from load_seen_items).
-        for row, uidx in enumerate(batch):
-            seen = seen_by_user.get(int(uidx))
-            if seen is not None:
-                scores[row, seen] = float("-inf")
-
-        # torch.topk returns (values, indices), both shape (b, k), along dim=1.
-        top_scores, top_idx = torch.topk(scores, k, dim=1)
-        rec_items.append(top_idx.cpu().numpy())
-        rec_scores.append(top_scores.cpu().numpy())
-
-    # Stack results from all batches: (total_users, k)
-    return np.concatenate(rec_items), np.concatenate(rec_scores)
+    # argpartition grabs the top-k cheaply, then we sort just those k by score.
+    k = min(k, len(scores))
+    top = np.argpartition(scores, -k)[-k:]
+    top = top[np.argsort(-scores[top])]
+    return idx2raw[top], scores[top], segment
 
 
-@torch.no_grad()
-def cold_start_topk(model, k, num_items, device) -> tuple[np.ndarray, np.ndarray]:
-    """Popularity ranking for users not in the checkpoint vocabulary.
-
-    For a user the model has never seen, we have no user embedding and no user
-    bias. The best we can do is predict global_mean + item_bias for every item,
-    which reduces to a popularity ranking: items that everyone tends to rate
-    highly float to the top. This is equivalent to what the model would predict
-    if it knew nothing about the user.
-    """
-    item_ids = torch.arange(num_items, device=device)
-    # item_bias returns shape (num_items, 1); squeeze(-1) flattens to (num_items,)
-    scores = model.global_mean + model.item_bias(item_ids).squeeze(-1)
-    top_scores, top_idx = torch.topk(scores, k)
-    return top_idx.cpu().numpy(), top_scores.cpu().numpy()
-
-
-def _build_records(customer_ids, rec_items, rec_scores, idx2movie, titles, k, segment) -> pd.DataFrame:
-    """Flatten (users × k) score arrays into a tidy long table."""
-    n = len(customer_ids)
-    movie_col = np.array([idx2movie[i] for i in rec_items.ravel()])
+def _build_records(user_id, movie_ids, scores, titles, segment) -> pd.DataFrame:
+    """Tidy long table of one user's recommendations."""
     return pd.DataFrame({
-        "customer_id": np.repeat(customer_ids, k),
-        "rank":        np.tile(np.arange(1, k + 1), n),
-        "movie_id":    movie_col,
-        "title":       [titles.get(m, "<unknown>") for m in movie_col],
-        "score":       rec_scores.ravel(),
+        "customer_id": user_id,
+        "rank":        np.arange(1, len(movie_ids) + 1),
+        "movie_id":    movie_ids,
+        "title":       [titles.get(int(m), "<unknown>") for m in movie_ids],
+        "score":       scores,
         "segment":     segment,
     })
 
 
-def run_batch(model, checkpoint, k, batch_size, num_items, device, rating_scale, sample_fraction, seed):
-    user2idx, item2idx = checkpoint["user2idx"], checkpoint["item2idx"]
-    idx2movie = {idx: mid for mid, idx in item2idx.items()}
-    titles = load_movie_titles()
+def recommend_single_user(algo, user_id, k, rating_scale, titles=None, idx2raw=None):
+    """Top-K for one user as a DataFrame, plus the segment ("warm"/"cold").
+
+    Shared by the CLI inspect mode and the dashboard. titles/idx2raw can be passed
+    in to avoid recomputing them per call.
+    """
+    titles  = titles if titles is not None else load_movie_titles()
+    idx2raw = idx2raw if idx2raw is not None else item_raw_ids(algo)
+    raw2inner = algo.trainset._raw2inner_id_items
+    seen = load_seen_items([user_id]).get(user_id, set())
+
+    movie_ids, scores, segment = top_k_for_user(
+        algo, user_id, k, seen, idx2raw, raw2inner, rating_scale
+    )
+    df = pd.DataFrame({
+        "rank":     range(1, len(movie_ids) + 1),
+        "movie_id": movie_ids,
+        "title":    [titles.get(int(m), "<unknown>") for m in movie_ids],
+        "score":    scores,
+    })
+    return df, segment
+
+
+def run_batch(algo, k, rating_scale, sample_fraction, seed):
+    idx2raw    = item_raw_ids(algo)
+    raw2inner  = algo.trainset._raw2inner_id_items
+    users_seen = algo.trainset._raw2inner_id_users  # membership test = 'user is warm'
+    titles     = load_movie_titles()
 
     users = load_qualifying_users(sample_fraction, seed)
-    warm = [u for u in users if u in user2idx]
-    cold = [u for u in users if u not in user2idx]
-    logger.info(f"Qualifying users sampled: {len(users):,} ({sample_fraction:.0%}) "
-                f"| warm: {len(warm):,} | cold: {len(cold):,}")
+    warm  = sum(u in users_seen for u in users)
+    logger.info(f"Qualifying users sampled: {len(users):,} ({sample_fraction:.0%}) | warm: {warm:,}")
 
+    seen_by_user = load_seen_items(users)
     frames = []
-
-    if warm:
-        logger.info(f"Loading seen items for {len(warm):,} warm users ...")
-        seen_by_user = load_seen_items(warm, user2idx, item2idx, device)
-        warm_indices = [user2idx[u] for u in warm]
-        logger.info("Scoring personalized recommendations ...")
-        rec_items, rec_scores = recommend_users(
-            model, warm_indices, seen_by_user, k, batch_size, num_items, device, rating_scale
+    for user_id in users:
+        seen = seen_by_user.get(user_id, set())
+        movie_ids, scores, segment = top_k_for_user(
+            algo, user_id, k, seen, idx2raw, raw2inner, rating_scale
         )
-        frames.append(_build_records(warm, rec_items, rec_scores, idx2movie, titles, k, "warm"))
-
-    if cold:
-        # Unknown users share one popularity list (global_mean + item_bias)
-        cold_items, cold_scores = cold_start_topk(model, k, num_items, device)
-        rec_items  = np.tile(cold_items, (len(cold), 1))
-        rec_scores = np.tile(cold_scores, (len(cold), 1))
-        frames.append(_build_records(cold, rec_items, rec_scores, idx2movie, titles, k, "cold"))
+        frames.append(_build_records(user_id, movie_ids, scores, titles, segment))
 
     out = pd.concat(frames, ignore_index=True).sort_values(["customer_id", "rank"])
-
     OUTPUTS_PATH.mkdir(parents=True, exist_ok=True)
     output_path = OUTPUTS_PATH / "recommendations.parquet"
     out.to_parquet(output_path, index=False)
     logger.info(f"Saved {len(out):,} recommendations ({len(users):,} users × {k}) to {output_path}")
 
 
-def recommend_single_user(
-    model, checkpoint, user_id, k, num_items, device, rating_scale
-) -> tuple[pd.DataFrame, str]:
-    """Top-K for one user as a DataFrame, plus the segment ("warm"/"cold").
-
-    Shared by the CLI inspect mode and the dashboard — both wrap this.
-    """
-    user2idx, item2idx = checkpoint["user2idx"], checkpoint["item2idx"]
-    idx2movie = {idx: mid for mid, idx in item2idx.items()}
-    titles = load_movie_titles()
-
-    if user_id in user2idx:
-        seen_by_user = load_seen_items([user_id], user2idx, item2idx, device)
-        rec_items, rec_scores = recommend_users(
-            model, [user2idx[user_id]], seen_by_user, k, 1, num_items, device, rating_scale
-        )
-        rec_items, rec_scores = rec_items[0], rec_scores[0]
-        segment = "warm"
-    else:
-        rec_items, rec_scores = cold_start_topk(model, k, num_items, device)
-        segment = "cold"
-
-    movie_ids = [idx2movie[i] for i in rec_items]
-    df = pd.DataFrame({
-        "rank":     range(1, len(movie_ids) + 1),
-        "movie_id": movie_ids,
-        "title":    [titles.get(m, "<unknown>") for m in movie_ids],
-        "score":    rec_scores,
-    })
-    return df, segment
-
-
-def run_inspect(model, checkpoint, user_id, k, num_items, device, rating_scale):
-    df, segment = recommend_single_user(model, checkpoint, user_id, k, num_items, device, rating_scale)
+def run_inspect(algo, user_id, k, rating_scale):
+    df, segment = recommend_single_user(algo, user_id, k, rating_scale)
     label = "personalized" if segment == "warm" else "cold start — popularity fallback"
     header = f"Top-{k} for user {user_id} ({label})"
 
@@ -255,7 +167,7 @@ def run_inspect(model, checkpoint, user_id, k, num_items, device, rating_scale):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Generate movie recommendations from a trained NCF checkpoint.")
+    parser = argparse.ArgumentParser(description="Generate movie recommendations from a trained SVD model.")
     parser.add_argument("--user-id", type=int, default=None,
                         help="Inspect recommendations for a single customer_id. Omit to run batch precompute.")
     parser.add_argument("--k", type=int, default=None, help="Number of recommendations (overrides config).")
@@ -267,18 +179,15 @@ def main():
     rating_scale = tuple(config["data"]["rating_scale"])
     k            = args.k or rec_cfg["top_k"]
 
-    device = get_device()
-    model, checkpoint = load_checkpoint(MODELS_PATH / "ncf_model.pt", device)
-    num_items = len(checkpoint["item2idx"])
-    logger.info(f"Loaded checkpoint: {len(checkpoint['user2idx']):,} users, {num_items:,} items | device: {device}")
+    algo = load_model(MODELS_PATH / "svd_model.pkl")
+    ts = algo.trainset
+    logger.info(f"Loaded model: {ts.n_users:,} users, {ts.n_items:,} items")
 
     if args.user_id is not None:
-        run_inspect(model, checkpoint, args.user_id, k, num_items, device, rating_scale)
+        run_inspect(algo, args.user_id, k, rating_scale)
     else:
-        run_batch(
-            model, checkpoint, k, rec_cfg["user_batch_size"], num_items, device, rating_scale,
-            sample_fraction=rec_cfg["qualifying_sample_fraction"], seed=config["seed"],
-        )
+        run_batch(algo, k, rating_scale,
+                  sample_fraction=rec_cfg["qualifying_sample_fraction"], seed=config["seed"])
 
 
 if __name__ == "__main__":
