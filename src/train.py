@@ -106,6 +106,7 @@ def main():
         lr_all=svd_cfg["lr_all"],
         reg_all=svd_cfg["reg_all"],
         random_state=seed,
+        verbose=True,  # print "Processing epoch N" so long fits show live progress
     )
 
     mlflow.set_experiment("Netflix_SVD")
@@ -113,11 +114,18 @@ def main():
         logger.info(f"Fitting SVD ({svd_cfg['n_epochs']} epochs) ...")
         algo.fit(trainset)
 
-        # Train RMSE, computed vectorized over the factors (not Surprise's per-row
-        # predict loop) — a quick sanity check on fit quality.
-        train_est  = estimate_pairs(algo, train_df["customer_id"], train_df["movie_id"], rating_scale)
-        train_rmse = float(np.sqrt(np.mean((train_est - train_df["rating"].to_numpy()) ** 2)))
-        logger.info(f"Train RMSE: {train_rmse:.4f}")
+        # Train vs held-out RMSE side by side: a big gap means the model is
+        # memorizing the training ratings. Both are computed vectorized over the
+        # learned factors (see src.model.estimate_pairs), not Surprise's per-row
+        # predict loop. The full evaluation (warm/cold, P@K) lives in src.evaluate;
+        # this is just a fast overfitting check at the end of training.
+        def rmse(df):
+            est = estimate_pairs(algo, df["customer_id"], df["movie_id"], rating_scale)
+            return float(np.sqrt(np.mean((est - df["rating"].to_numpy()) ** 2)))
+
+        train_rmse, test_rmse = rmse(train_df), rmse(test_df)
+        logger.info(f"Train RMSE: {train_rmse:.4f} | Test RMSE: {test_rmse:.4f} "
+                    f"(gap {test_rmse - train_rmse:+.4f})")
 
         mlflow.log_params({
             **svd_cfg,
@@ -130,7 +138,7 @@ def main():
             "n_test_rows":          len(test_df),
             "cold_user_fraction":   round(float(cold_fraction), 4),
         })
-        mlflow.log_metric("train_rmse", train_rmse)
+        mlflow.log_metrics({"train_rmse": train_rmse, "test_rmse": test_rmse})
         mlflow.log_artifact(str(CONFIG_PATH / "settings.yaml"))
 
         # Stash the run id on the algo so evaluate.py can attach test metrics to

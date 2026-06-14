@@ -16,10 +16,10 @@ training:
 # Surprise runs plain SGD for a fixed n_epochs; lr_all / reg_all are the global
 # learning rate and L2 regularization applied to all factors and biases.
 svd:
-  n_factors: 100
+  n_factors: 50      # fewer latent factors -> less capacity to memorize the train ratings
   n_epochs: 20
   lr_all: 0.005
-  reg_all: 0.02
+  reg_all: 0.05      # L2 on factors+biases; 0.02 (Surprise default) was too low -> overfit
 
 evaluation:
   top_n: 10

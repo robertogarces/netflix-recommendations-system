@@ -42,30 +42,44 @@ def _raw_to_inner(trainset, raw_ids: np.ndarray, kind: str) -> np.ndarray:
     return pd.Series(raw_ids).map(mapping).to_numpy()  # float array with NaN for unknown
 
 
-def estimate_pairs(algo, raw_users, raw_items, rating_scale) -> np.ndarray:
+def estimate_pairs(algo, raw_users, raw_items, rating_scale, chunk_size: int = 2_000_000) -> np.ndarray:
     """Vectorized rating estimates for aligned (user, item) arrays.
 
     Mirrors surprise.SVD.estimate but over whole arrays: start from global_mean,
     add b_u where the user is known, add b_i where the item is known, and add the
     factor dot product only where BOTH are known. Result is clipped to the rating
     scale, matching how Surprise predictions are normally clamped.
+
+    Processed in chunks of `chunk_size` rows: the factor gather algo.pu[users]
+    builds an (n_rows, n_factors) array, so doing it in one shot at tens of
+    millions of rows (a 50% sample is ~40M train rows) allocates tens of GB and
+    OOMs. Chunking bounds peak memory to about chunk_size × n_factors floats.
     """
     ts = algo.trainset
+    # The raw→inner mapping over the full arrays is cheap (one float per row);
+    # only the factor gather below is memory-heavy, so that is what we chunk.
     u_inner = _raw_to_inner(ts, np.asarray(raw_users), "user")
     i_inner = _raw_to_inner(ts, np.asarray(raw_items), "item")
 
-    uk = ~np.isnan(u_inner)            # user-known mask
-    ik = ~np.isnan(i_inner)            # item-known mask
-    ui = np.where(uk, u_inner, 0).astype(np.int64)
-    ii = np.where(ik, i_inner, 0).astype(np.int64)
+    out = np.empty(len(u_inner), dtype=np.float64)
+    for start in range(0, len(u_inner), chunk_size):
+        end = start + chunk_size
+        uc, ic = u_inner[start:end], i_inner[start:end]
 
-    est = np.full(len(ui), ts.global_mean, dtype=np.float64)
-    est[uk] += algo.bu[ui[uk]]
-    est[ik] += algo.bi[ii[ik]]
-    both = uk & ik
-    # einsum 'ij,ij->i' is a per-row dot product of the two factor matrices.
-    est[both] += np.einsum("ij,ij->i", algo.pu[ui[both]], algo.qi[ii[both]])
-    return np.clip(est, *rating_scale)
+        uk = ~np.isnan(uc)             # user-known mask
+        ik = ~np.isnan(ic)             # item-known mask
+        ui = np.where(uk, uc, 0).astype(np.int64)
+        ii = np.where(ik, ic, 0).astype(np.int64)
+
+        est = np.full(len(uc), ts.global_mean, dtype=np.float64)
+        est[uk] += algo.bu[ui[uk]]
+        est[ik] += algo.bi[ii[ik]]
+        both = uk & ik
+        # einsum 'ij,ij->i' is a per-row dot product of the two factor matrices.
+        est[both] += np.einsum("ij,ij->i", algo.pu[ui[both]], algo.qi[ii[both]])
+        out[start:end] = est
+
+    return np.clip(out, *rating_scale)
 
 
 def score_all_items(algo, raw_uid, rating_scale) -> tuple[np.ndarray, str]:
