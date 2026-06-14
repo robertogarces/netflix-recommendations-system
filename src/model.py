@@ -10,6 +10,12 @@ global_mean and raw-id↔inner-id mappings. That lets us score in a couple of
 vectorized numpy operations instead of Surprise's per-pair Python `predict` loop,
 which matters when the test set has millions of rows.
 
+Two id spaces — the one friction to keep in mind: the data speaks "raw" ids
+(customer_id, movie_id), but Surprise indexes its factor arrays by compact
+"inner" ids (0..n-1). So every scoring helper translates raw→inner on the way in
+(_raw_to_inner) and inner→raw on the way out (item_raw_ids). The placeholder/mask
+dance in estimate_pairs exists only to make that translation vectorizable.
+
 Unknown users/items (cold start) degrade exactly as Surprise's own estimator
 does: drop whichever term we lack and fall back toward global_mean + known bias.
 """
@@ -68,6 +74,9 @@ def estimate_pairs(algo, raw_users, raw_items, rating_scale, chunk_size: int = 2
 
         uk = ~np.isnan(uc)             # user-known mask
         ik = ~np.isnan(ic)             # item-known mask
+        # Unknown ids get placeholder index 0 so the fancy-indexing below never
+        # errors on NaN; the uk/ik masks guarantee those placeholder rows are
+        # never actually read (we only add b_u/b_i/factors where known).
         ui = np.where(uk, uc, 0).astype(np.int64)
         ii = np.where(ik, ic, 0).astype(np.int64)
 

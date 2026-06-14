@@ -35,26 +35,48 @@ def precision_recall_at_k(
     Users with no relevant items (no true rating >= threshold) are excluded from
     both metrics because recall would be 0/0.
 
-    Vectorized strategy: sort the whole array so each user's items are contiguous
-    and ordered by predicted score, then use np.add.reduceat to sum within each
-    user's block — a GROUP BY SUM in one NumPy pass instead of a Python loop.
+    Why vectorized? The obvious version loops per user ("sort that user's items,
+    take the top K, count the relevant ones"). Instead we sort the WHOLE array so
+    every user's rows form one contiguous, score-ordered block, then sum within
+    each block with np.add.reduceat — a GROUP BY SUM in a single NumPy pass. At
+    millions of test rows the Python loop is the bottleneck; this avoids it.
+
+    Worked example, k=1, relevant = (true >= threshold):
+
+        row user est true                 after lexsort (user asc, est desc):
+         0   A   4.8  5  relevant            A block -> [(4.8,5), (3.0,5)]
+         1   A   3.0  5  relevant            B block -> [(4.0,2)]
+         2   B   4.0  2
+
+        start_idx = [0, 2]        counts = [2, 1]
+        rank      = [0, 1, 0]     in_top_k (k=1) = [T, F, T]
+        relevant  = [T, T, F]
+        n_relevant       = reduceat(relevant,            [0,2]) = [2, 0]
+        n_relevant_top_k = reduceat(relevant & in_top_k, [0,2]) = [1, 0]
+        -> B dropped (0 relevant); A: precision = 1/1, recall = 1/2
     """
-    # lexsort: primary key user_ids (groups users), secondary -est (best first).
+    # lexsort sorts by the LAST key first: user_ids (primary) groups each user's
+    # rows together, -est_ratings (secondary) orders them best-score-first.
     order  = np.lexsort((-est_ratings, user_ids))
     uids   = user_ids[order]
     true_r = true_ratings[order]
 
+    # uids is now sorted, so each user is one contiguous block. start_idx = where
+    # each block begins; counts = its length. These drive the segmented sums.
     _, start_idx, counts = np.unique(uids, return_index=True, return_counts=True)
     relevant = true_r >= threshold
 
-    # 0-based rank of each row within its user's block; top-K = rank < k.
+    # rank = each row's 0-based position within its block (global index minus the
+    # block's start). Since rows are score-ordered, rank < k marks the top-K.
     rank     = np.arange(len(uids)) - np.repeat(start_idx, counts)
     in_top_k = rank < k
 
-    n_relevant       = np.add.reduceat(relevant,            start_idx)
-    n_relevant_top_k = np.add.reduceat(relevant & in_top_k, start_idx)
+    # np.add.reduceat(arr, start_idx) sums arr in the segments [start_idx[i]:start_idx[i+1]]
+    # — i.e. one total per user, in a single C-level pass.
+    n_relevant       = np.add.reduceat(relevant,            start_idx)  # relevant items per user
+    n_relevant_top_k = np.add.reduceat(relevant & in_top_k, start_idx)  # relevant AND in top-K
 
-    mask = n_relevant > 0
+    mask = n_relevant > 0  # drop users with no relevant items (recall undefined)
     precision = n_relevant_top_k[mask] / k
     recall    = n_relevant_top_k[mask] / n_relevant[mask]
     return float(precision.mean()), float(recall.mean())

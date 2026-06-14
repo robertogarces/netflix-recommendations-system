@@ -78,16 +78,23 @@ def load_seen_items(customer_ids) -> dict[int, set]:
 
 
 def top_k_for_user(algo, user_id, k, seen, idx2raw, raw2inner, rating_scale):
-    """Top-K (movie_ids, scores, segment) for one user, masking already-seen items."""
-    scores, segment = score_all_items(algo, user_id, rating_scale)  # by inner item id
+    """Top-K (movie_ids, scores, segment) for one user, masking already-seen items.
 
-    # Mask items the user already rated by pushing their score to -inf.
+    Note the two id spaces (see src.model): `scores` is indexed by Surprise INNER
+    item id, while `seen` and the return value are RAW movie_ids. raw2inner maps
+    seen items into the scores array; idx2raw decodes the chosen inner ids back.
+    """
+    scores, segment = score_all_items(algo, user_id, rating_scale)  # indexed by inner item id
+
+    # Mask items the user already rated: translate raw movie_ids -> inner ids and
+    # push their score to -inf so topk never returns them.
     if seen:
         inner = [raw2inner[m] for m in seen if m in raw2inner]
         if inner:
             scores[inner] = -np.inf
 
-    # argpartition grabs the top-k cheaply, then we sort just those k by score.
+    # argpartition grabs the top-k inner ids cheaply (O(n)), then we sort just
+    # those k by score; idx2raw turns the inner ids back into movie_ids.
     k = min(k, len(scores))
     top = np.argpartition(scores, -k)[-k:]
     top = top[np.argsort(-scores[top])]
