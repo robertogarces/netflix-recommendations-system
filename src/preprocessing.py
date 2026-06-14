@@ -11,10 +11,11 @@ index mappings from the training data when the model is fit (see src.train).
 
 import logging
 import pickle
-import yaml
-import polars as pl
 
-from config.paths import RAW_DATA_PATH, PROCESSED_DATA_PATH, ARTIFACTS_PATH, CONFIG_PATH
+import polars as pl
+import yaml
+
+from config.paths import ARTIFACTS_PATH, CONFIG_PATH, PROCESSED_DATA_PATH, RAW_DATA_PATH
 
 logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)

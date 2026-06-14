@@ -7,13 +7,14 @@ outputs/metrics.json (for the dashboard) and to mlflow.
 
 import json
 import logging
+
+import mlflow
 import numpy as np
 import pandas as pd
 import yaml
-import mlflow
 
-from config.paths import OUTPUTS_PATH, MODELS_PATH, CONFIG_PATH
-from src.model import load_model, estimate_pairs
+from config.paths import CONFIG_PATH, MODELS_PATH, OUTPUTS_PATH
+from src.model import estimate_pairs, load_model
 
 logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)

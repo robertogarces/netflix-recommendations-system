@@ -15,13 +15,14 @@ the model predicts for an unknown user.
 
 import argparse
 import logging
-import yaml
-import numpy as np
-import polars as pl
-import pandas as pd
 
-from config.paths import PROCESSED_DATA_PATH, RAW_DATA_PATH, OUTPUTS_PATH, MODELS_PATH, CONFIG_PATH
-from src.model import load_model, score_all_items, item_raw_ids
+import numpy as np
+import pandas as pd
+import polars as pl
+import yaml
+
+from config.paths import CONFIG_PATH, MODELS_PATH, OUTPUTS_PATH, PROCESSED_DATA_PATH, RAW_DATA_PATH
+from src.model import item_raw_ids, load_model, score_all_items
 
 logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)

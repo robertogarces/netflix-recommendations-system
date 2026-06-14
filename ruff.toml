@@ -1,0 +1,16 @@
+# Ruff config. Lint: `ruff check`. Format (opt-in): `ruff format`.
+target-version = "py310"
+line-length = 120
+extend-exclude = ["notebooks"]   # exploratory EDA; not held to lint standards
+
+[lint]
+# pycodestyle (E/W), pyflakes (F), isort (I), pyupgrade (UP), bugbear (B).
+select = ["E", "F", "W", "I", "UP", "B"]
+
+[lint.isort]
+known-first-party = ["src", "config", "app"]
+
+[lint.per-file-ignores]
+# dashboard.py inserts the project root on sys.path before importing src/config,
+# so its imports are intentionally not at the top and not isort-orderable.
+"app/dashboard.py" = ["E402", "I001"]

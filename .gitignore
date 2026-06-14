@@ -64,3 +64,7 @@ mlruns/*/
 !mlruns/.gitkeep  # si quieres mantener la carpeta vacía en el repo
 
 src/__pycache__
+
+# Tooling caches
+.ruff_cache/
+.pytest_cache/

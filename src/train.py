@@ -6,14 +6,15 @@ Outputs:
 """
 
 import logging
-import yaml
+
 import mlflow
 import numpy as np
 import pandas as pd
+import yaml
 from surprise import SVD, Dataset, Reader
 
-from config.paths import PROCESSED_DATA_PATH, OUTPUTS_PATH, MODELS_PATH, CONFIG_PATH
-from src.model import save_model, estimate_pairs
+from config.paths import CONFIG_PATH, MODELS_PATH, OUTPUTS_PATH, PROCESSED_DATA_PATH
+from src.model import estimate_pairs, save_model
 
 logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)

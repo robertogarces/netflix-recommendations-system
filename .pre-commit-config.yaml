@@ -1,0 +1,18 @@
+# Pre-commit hooks. Install once with `pre-commit install` (or `make install-dev`).
+# Lint-only by design: ruff is not run with --fix and ruff-format is intentionally
+# omitted, to preserve the deliberate aligned-assignment style in this codebase.
+# Use `make format` if you ever want to apply ruff's formatter.
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files   # guard against committing data/model blobs
+        args: ["--maxkb=5000"]
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.6
+    hooks:
+      - id: ruff   # lint only (no --fix)
