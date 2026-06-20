@@ -23,6 +23,7 @@ tests/
   conftest.py         # shared fixtures (tiny_model: a small fitted SVD)
   test_metrics.py     # precision_recall_at_k (src/evaluate.py)
   test_model.py       # estimate_pairs        (src/model.py)
+  test_recommend.py   # top_k_for_user        (src/recommend.py)
 ```
 `conftest.py` holds fixtures pytest injects by name — currently `tiny_model`, a
 small Surprise SVD fitted on ~100 synthetic ratings (session-scoped, read-only),
@@ -43,6 +44,11 @@ in a way that still *runs* and returns plausible-looking numbers. So the pattern
    at a concrete expectation (and so the worked examples in the docstrings stay true).
 3. **Edge cases** — the boundaries where the index math or the metric definition
    bites: empty groups, `k` larger than a group, ties.
+
+When an exact oracle would be fragile — e.g. clipped scores that tie at the
+rating-scale boundary — a test instead asserts the **properties** that define a
+correct result (sorted, complete, nothing left out beats anything kept). Property
+checks hold no matter how ties happen to break.
 
 ---
 
@@ -84,3 +90,22 @@ oracle**, and the `tiny_model` fixture supplies a real fitted model with known i
 The two oracle-style tests are complementary: `test_matches_surprise_predict` runs in
 a single chunk (200 rows, well under the 2M default), so it checks the **math**; only
 `test_chunking_is_invariant` exercises the **chunk boundaries**.
+
+---
+
+### `top_k_for_user` — `tests/test_recommend.py`
+`top_k_for_user` (`src/recommend.py`) turns a user's catalog scores into a ranked
+top-K: it scores every item (`score_all_items`), masks already-seen items to `-inf`,
+selects the top K with `argpartition`, and decodes inner ids back to raw `movie_id`s.
+An exact full-sort oracle is fragile here (clipped scores can tie at the scale
+boundary), so the helper `_assert_valid_topk` checks the **properties** of a correct
+top-K instead: right length, sorted descending, no seen items, scores that decode to
+the right item, and a frontier check (nothing left out outscores anything kept). Four
+tests drive it through the helper:
+
+| Test | Pins | Why it matters |
+|------|------|----------------|
+| `test_warm_user_returns_correct_topk` | a warm user gets a valid, correctly-decoded top-K, segment `"warm"` | the core path: argpartition ranking + inner→raw decoding |
+| `test_seen_items_are_excluded` | items passed as `seen` never appear, and the rest is still a valid top-K | the seen-masking (raw→inner→ -inf) that keeps recommendations fresh |
+| `test_k_larger_than_catalog_returns_all_items` | `k` beyond the catalog size returns every item, once each | the `k = min(k, n_items)` clamp, with no duplicates |
+| `test_cold_user_still_gets_recommendations` | an unknown user gets segment `"cold"` and a valid popularity-ranked top-K | cold users still receive K results, ranked by the popularity fallback |
