@@ -20,11 +20,13 @@ and `testpaths = tests` is where pytest looks.
 ## Layout
 ```
 tests/
+  conftest.py         # shared fixtures (tiny_model: a small fitted SVD)
   test_metrics.py     # precision_recall_at_k (src/evaluate.py)
+  test_model.py       # estimate_pairs        (src/model.py)
 ```
-A `conftest.py` will appear once a test needs a **shared fixture** (the first will
-be a tiny fitted Surprise model for the scoring tests); until then there is
-nothing for it to hold.
+`conftest.py` holds fixtures pytest injects by name — currently `tiny_model`, a
+small Surprise SVD fitted on ~100 synthetic ratings (session-scoped, read-only),
+so the scoring tests get a real fitted model without touching the 100M-row dataset.
 
 ---
 
@@ -62,3 +64,23 @@ per-user with `np.add.reduceat` instead of looping. Five tests:
 The last three double as **executable documentation of deliberate choices**: the
 fixed-`k` denominator, the exclusion of no-relevant users, and stable tie-breaking
 are decisions, not accidents — the tests are where they are written down and defended.
+
+---
+
+### `estimate_pairs` — `tests/test_model.py`
+`estimate_pairs` (`src/model.py`) is the vectorized, chunked equivalent of looping
+`surprise.SVD.predict` over `(user, item)` pairs: it scores millions of rows with a
+few NumPy passes instead of a per-row Python loop. **Surprise's own `predict` is the
+oracle**, and the `tiny_model` fixture supplies a real fitted model with known ids
+(users 0–19, items 0–14) and guaranteed-unknown ids (e.g. 9999). Four tests:
+
+| Test | Pins | Why it matters |
+|------|------|----------------|
+| `test_matches_surprise_predict` | vectorized output == `algo.predict(u, i).est` over 200 known/unknown pairs | validates the whole formula (`μ + b_u + b_i + q_i·p_u`), the clamping and the unknown-id fallback against the library itself |
+| `test_chunking_is_invariant` | `chunk_size=7` (8 chunks) == single pass, bit-for-bit | regression guard for the OOM fix — chunking must be a *memory* optimization only, never change a result (catches off-by-one at the chunk seams) |
+| `test_unknown_ids_fall_back_like_surprise` | both unknown → `μ`; warm user only → `μ + b_u`; warm item only → `μ + b_i` | an executable spec of the three cold-start branches, readable without running Surprise in your head |
+| `test_clamps_scores_to_rating_scale` | a prediction forced past the ceiling clips to the scale max | makes the clamp actually fire (via an inflated bias on a `deepcopy`, so the shared fixture stays clean) |
+
+The two oracle-style tests are complementary: `test_matches_surprise_predict` runs in
+a single chunk (200 rows, well under the 2M default), so it checks the **math**; only
+`test_chunking_is_invariant` exercises the **chunk boundaries**.
