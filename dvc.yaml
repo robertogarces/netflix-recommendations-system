@@ -1,0 +1,76 @@
+stages:
+  preprocess:
+    cmd: python -m src.preprocessing
+    deps:
+      - src/preprocessing.py
+      - config/paths.py
+      - data/raw/combined_data_1.txt
+      - data/raw/combined_data_2.txt
+      - data/raw/combined_data_3.txt
+      - data/raw/combined_data_4.txt
+    params:
+      - config/settings.yaml:
+          - data.num_raw_files
+          - preprocessing.min_movie_ratings
+          - preprocessing.min_user_ratings
+    outs:
+      - data/processed/processed_data.parquet
+      - artifacts/valid_movies.pkl
+      - artifacts/valid_users.pkl
+
+  train:
+    cmd: python -m src.train
+    deps:
+      - src/train.py
+      - src/model.py
+      - config/paths.py
+      - data/processed/processed_data.parquet
+    params:
+      - config/settings.yaml:
+          - seed
+          - data.rating_scale
+          - training.data_sample_fraction
+          - training.test_size
+          - svd.n_factors
+          - svd.n_epochs
+          - svd.lr_all
+          - svd.reg_all
+    outs:
+      - models/svd_model.pkl
+      - outputs/test_set.parquet
+
+  evaluate:
+    cmd: python -m src.evaluate
+    deps:
+      - src/evaluate.py
+      - src/model.py
+      - config/paths.py
+      - models/svd_model.pkl
+      - outputs/test_set.parquet
+    params:
+      - config/settings.yaml:
+          - data.rating_scale
+          - evaluation.top_n
+          - evaluation.relevance_threshold
+    metrics:
+      - outputs/metrics.json:
+          cache: false
+
+  recommend:
+    cmd: python -m src.recommend
+    deps:
+      - src/recommend.py
+      - src/model.py
+      - config/paths.py
+      - models/svd_model.pkl
+      - data/processed/processed_data.parquet
+      - data/raw/qualifying.txt
+      - data/raw/movie_titles.csv
+    params:
+      - config/settings.yaml:
+          - seed
+          - data.rating_scale
+          - recommend.top_k
+          - recommend.qualifying_sample_fraction
+    outs:
+      - outputs/recommendations.parquet

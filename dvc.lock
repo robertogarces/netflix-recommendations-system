@@ -1,0 +1,166 @@
+schema: '2.0'
+stages:
+  preprocess:
+    cmd: python -m src.preprocessing
+    deps:
+    - path: config/paths.py
+      hash: md5
+      md5: 5ca4bc037aaa7c8a281ce1ff6c836778
+      size: 457
+    - path: data/raw/combined_data_1.txt
+      hash: md5
+      md5: f1a987bffc5d7642a4a973f6b43556f1
+      size: 495032008
+    - path: data/raw/combined_data_2.txt
+      hash: md5
+      md5: 73355b1172eb264b05171e2212c3a547
+      size: 555207357
+    - path: data/raw/combined_data_3.txt
+      hash: md5
+      md5: 0829665bf28144e70e5b99588db43f05
+      size: 465157779
+    - path: data/raw/combined_data_4.txt
+      hash: md5
+      md5: 3e5940147d559bcc96619955202f40b8
+      size: 552537802
+    - path: src/preprocessing.py
+      hash: md5
+      md5: 4609a438d6776c0c3ea29bbab8914445
+      size: 7611
+    params:
+      config/settings.yaml:
+        data.num_raw_files: 4
+        preprocessing.min_movie_ratings: 50
+        preprocessing.min_user_ratings: 10
+    outs:
+    - path: artifacts/valid_movies.pkl
+      hash: md5
+      md5: cd61e930285f3d7d31f29bb4423c5fb6
+      size: 52934
+    - path: artifacts/valid_users.pkl
+      hash: md5
+      md5: d440374153daae1ff458ca5c77fce8a9
+      size: 2297312
+    - path: data/processed/processed_data.parquet
+      hash: md5
+      md5: 886b531778a456bf4df04fe25f5e3208
+      size: 555535064
+  train:
+    cmd: python -m src.train
+    deps:
+    - path: config/paths.py
+      hash: md5
+      md5: 5ca4bc037aaa7c8a281ce1ff6c836778
+      size: 457
+    - path: data/processed/processed_data.parquet
+      hash: md5
+      md5: 886b531778a456bf4df04fe25f5e3208
+      size: 555535064
+    - path: src/model.py
+      hash: md5
+      md5: 473a20d49b14437dd36850d30cb9611f
+      size: 5447
+    - path: src/train.py
+      hash: md5
+      md5: 46e1adc6c8530e2e33d1c42cd1a36482
+      size: 6997
+    params:
+      config/settings.yaml:
+        data.rating_scale:
+        - 1.0
+        - 5.0
+        seed: 42
+        svd.lr_all: 0.005
+        svd.n_epochs: 20
+        svd.n_factors: 50
+        svd.reg_all: 0.05
+        training.data_sample_fraction: 0.1
+        training.test_size: 0.2
+    outs:
+    - path: models/svd_model.pkl
+      hash: md5
+      md5: e45ade7ef36dd44222afcece974b5b88
+      size: 246410981
+    - path: outputs/test_set.parquet
+      hash: md5
+      md5: 6c0317a46498c91db026b52aea933010
+      size: 7180612
+  evaluate:
+    cmd: python -m src.evaluate
+    deps:
+    - path: config/paths.py
+      hash: md5
+      md5: 5ca4bc037aaa7c8a281ce1ff6c836778
+      size: 457
+    - path: models/svd_model.pkl
+      hash: md5
+      md5: e45ade7ef36dd44222afcece974b5b88
+      size: 246410981
+    - path: outputs/test_set.parquet
+      hash: md5
+      md5: 6c0317a46498c91db026b52aea933010
+      size: 7180612
+    - path: src/evaluate.py
+      hash: md5
+      md5: f9023e2304a1c184c8caea2bce777dfd
+      size: 6745
+    - path: src/model.py
+      hash: md5
+      md5: 473a20d49b14437dd36850d30cb9611f
+      size: 5447
+    params:
+      config/settings.yaml:
+        data.rating_scale:
+        - 1.0
+        - 5.0
+        evaluation.relevance_threshold: 4.5
+        evaluation.top_n: 10
+    outs:
+    - path: outputs/metrics.json
+      hash: md5
+      md5: a7fb4e0ee5bd7d0c563737a88410ead0
+      size: 397
+  recommend:
+    cmd: python -m src.recommend
+    deps:
+    - path: config/paths.py
+      hash: md5
+      md5: 5ca4bc037aaa7c8a281ce1ff6c836778
+      size: 457
+    - path: data/processed/processed_data.parquet
+      hash: md5
+      md5: 886b531778a456bf4df04fe25f5e3208
+      size: 555535064
+    - path: data/raw/movie_titles.csv
+      hash: md5
+      md5: d2b86d3d9ba8b491d62a85c9cf6aea39
+      size: 577547
+    - path: data/raw/qualifying.txt
+      hash: md5
+      md5: 88be8340ad7b3c31dfd7b6f87e7b9022
+      size: 52452386
+    - path: models/svd_model.pkl
+      hash: md5
+      md5: e45ade7ef36dd44222afcece974b5b88
+      size: 246410981
+    - path: src/model.py
+      hash: md5
+      md5: 473a20d49b14437dd36850d30cb9611f
+      size: 5447
+    - path: src/recommend.py
+      hash: md5
+      md5: ff7f5fb299bf1cd94f314d3607ac8d20
+      size: 8112
+    params:
+      config/settings.yaml:
+        data.rating_scale:
+        - 1.0
+        - 5.0
+        recommend.qualifying_sample_fraction: 0.01
+        recommend.top_k: 10
+        seed: 42
+    outs:
+    - path: outputs/recommendations.parquet
+      hash: md5
+      md5: eadae8e7b6515afeda8d05fddbfe67d6
+      size: 103719
