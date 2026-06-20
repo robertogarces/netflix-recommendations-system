@@ -20,10 +20,11 @@ and `testpaths = tests` is where pytest looks.
 ## Layout
 ```
 tests/
-  conftest.py         # shared fixtures (tiny_model: a small fitted SVD)
-  test_metrics.py     # precision_recall_at_k (src/evaluate.py)
-  test_model.py       # estimate_pairs, item_raw_ids (src/model.py)
-  test_recommend.py   # top_k_for_user        (src/recommend.py)
+  conftest.py             # shared fixtures (tiny_model: a small fitted SVD)
+  test_metrics.py         # precision_recall_at_k        (src/evaluate.py)
+  test_model.py           # estimate_pairs, item_raw_ids (src/model.py)
+  test_recommend.py       # top_k_for_user               (src/recommend.py)
+  test_preprocessing.py   # parse_raw_file, filter_sparse (src/preprocessing.py)
 ```
 `conftest.py` holds fixtures pytest injects by name — currently `tiny_model`, a
 small Surprise SVD fitted on ~100 synthetic ratings (session-scoped, read-only),
@@ -119,3 +120,19 @@ checks it is the **exact inverse** of the trainset's raw→inner map in both dir
 plus its shape and dtype. It is deliberately independent: `top_k_for_user`'s tests use
 this array on both sides of their assertions, so a bug *in* it would hide there; this
 test cross-checks it against the trainset's own map instead.
+
+---
+
+### `parse_raw_file` & `filter_sparse` — `tests/test_preprocessing.py`
+The two pure functions of `src/preprocessing.py`, tested without the real dataset.
+`parse_raw_file` reads Netflix's mixed `movie_id:`-header / rating-row format and
+forward-fills the movie_id onto each rating; `filter_sparse` drops movies then users
+below the rating-count thresholds. The parse tests write a tiny raw file to a
+`tmp_path`; the filter tests build a small in-memory frame.
+
+| Test | Pins | Why it matters |
+|------|------|----------------|
+| `test_parse_forward_fills_movie_id` | each rating inherits the movie_id of the header above it, with correct dtypes and parsed date | the core parse trick (header detect + `forward_fill`) — a wrong fill silently mislabels every rating |
+| `test_parse_drops_malformed_rows` | a non-numeric id casts to null and the row is dropped | the lenient `strict=False` cast + `drop_nulls` that tolerates dirty lines |
+| `test_filter_sparse_removes_below_threshold` | a movie under `min_movie_ratings` is removed | the sparsity filter keeps only movies with enough signal to learn from |
+| `test_movie_filter_cascades_to_users` | removing a sparse movie pushes a user under the user threshold, dropping them too | pins the documented **movie-then-user order** — the cascade is intended, not a bug |
