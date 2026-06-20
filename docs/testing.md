@@ -22,7 +22,7 @@ and `testpaths = tests` is where pytest looks.
 tests/
   conftest.py         # shared fixtures (tiny_model: a small fitted SVD)
   test_metrics.py     # precision_recall_at_k (src/evaluate.py)
-  test_model.py       # estimate_pairs        (src/model.py)
+  test_model.py       # estimate_pairs, item_raw_ids (src/model.py)
   test_recommend.py   # top_k_for_user        (src/recommend.py)
 ```
 `conftest.py` holds fixtures pytest injects by name — currently `tiny_model`, a
@@ -109,3 +109,13 @@ tests drive it through the helper:
 | `test_seen_items_are_excluded` | items passed as `seen` never appear, and the rest is still a valid top-K | the seen-masking (raw→inner→ -inf) that keeps recommendations fresh |
 | `test_k_larger_than_catalog_returns_all_items` | `k` beyond the catalog size returns every item, once each | the `k = min(k, n_items)` clamp, with no duplicates |
 | `test_cold_user_still_gets_recommendations` | an unknown user gets segment `"cold"` and a valid popularity-ranked top-K | cold users still receive K results, ranked by the popularity fallback |
+
+---
+
+### `item_raw_ids` — `tests/test_model.py`
+`item_raw_ids` (`src/model.py`) builds the inner→raw item-id array used to decode
+top-K results back to `movie_id`s. One test, `test_item_raw_ids_inverts_the_inner_mapping`,
+checks it is the **exact inverse** of the trainset's raw→inner map in both directions,
+plus its shape and dtype. It is deliberately independent: `top_k_for_user`'s tests use
+this array on both sides of their assertions, so a bug *in* it would hide there; this
+test cross-checks it against the trainset's own map instead.

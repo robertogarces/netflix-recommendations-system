@@ -11,7 +11,7 @@ import copy
 import numpy as np
 import pytest
 
-from src.model import estimate_pairs
+from src.model import estimate_pairs, item_raw_ids
 
 
 def test_matches_surprise_predict(tiny_model):
@@ -73,3 +73,24 @@ def test_clamps_scores_to_rating_scale(tiny_model):
 
     out = estimate_pairs(a, [u_raw], [i_raw], scale)[0]
     assert out == pytest.approx(scale[1])
+
+
+def test_item_raw_ids_inverts_the_inner_mapping(tiny_model):
+    """item_raw_ids is the exact inverse of the trainset's raw->inner item map.
+
+    Independent on purpose: top_k_for_user's tests use this array on both sides of
+    their checks, so they would not catch a bug in it; here it is cross-checked
+    against the trainset's own map.
+    """
+    algo, _ = tiny_model
+    idx2raw = item_raw_ids(algo)
+    raw2inner = algo.trainset._raw2inner_id_items
+
+    assert idx2raw.shape == (algo.trainset.n_items,)
+    assert idx2raw.dtype == np.int64
+
+    for inner in range(algo.trainset.n_items):        # inner -> raw -> inner
+        assert raw2inner[int(idx2raw[inner])] == inner
+
+    for raw, inner in raw2inner.items():              # raw -> inner -> raw
+        assert int(idx2raw[inner]) == raw
