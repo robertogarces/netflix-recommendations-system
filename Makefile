@@ -34,7 +34,10 @@ recommend:  ## Batch recommendations -> outputs/recommendations.parquet
 pipeline: preprocess train evaluate recommend  ## Run the full pipeline end to end
 
 # --- App ---
-.PHONY: dashboard
+.PHONY: serve dashboard
+serve:  ## Serve the recommendation API (FastAPI + uvicorn)
+	uvicorn app.api:app --reload
+
 dashboard:  ## Launch the Streamlit dashboard
 	streamlit run app/dashboard.py
 
