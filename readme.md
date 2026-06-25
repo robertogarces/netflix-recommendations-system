@@ -1,139 +1,81 @@
-![Python](https://img.shields.io/badge/Python-3.10-blue)
-![PyTorch](https://img.shields.io/badge/PyTorch-2.7-EE4C2C?logo=pytorch&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3.10-blue?logo=python&logoColor=white)
+![Surprise](https://img.shields.io/badge/Surprise-SVD-f7931e)
 ![DVC](https://img.shields.io/badge/DVC-pipeline-945DD6?logo=dvc&logoColor=white)
 ![MLflow](https://img.shields.io/badge/MLflow-tracking-0194E2?logo=mlflow&logoColor=white)
-![Docker](https://img.shields.io/badge/Docker-container-2496ED?logo=docker&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-serving-009688?logo=fastapi&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-compose-2496ED?logo=docker&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
+# 🎬 Netflix Movie Recommender — SVD, end to end
 
-# 🎬 Netflix Movie Recommendation System — End-to-End ML Pipeline
+A movie recommender on the [Netflix Prize dataset](https://www.kaggle.com/datasets/netflix-inc/netflix-prize-data)
+built on Funk matrix factorization (Surprise `SVD`). It covers the full loop: a
+reproducible **DVC pipeline** (preprocess → train → evaluate → recommend) and an
+online **serving** layer (FastAPI API + Streamlit dashboard), with a pytest suite
+and MLflow tracking.
 
-This repository contains a modular and reproducible machine learning pipeline built with [DVC](https://dvc.org/) and Docker. The goal is to streamline the end-to-end process of data preprocessing, model training, and inference in a clean and organized way.
-
-📖 For full technical documentation, including model design, pipeline stages, evaluation metrics, and artifacts, see [docs/netflix-model-docs.md](docs/netflix-model-docs.md).
+📖 Deep documentation lives in **[docs/](docs/README.md)** (one focused doc per topic).
+The forward-looking plan is in **[ROADMAP.md](ROADMAP.md)**.
 
 ---
 
-## 📦 Project Structure
-
+## Architecture
+```mermaid
+flowchart LR
+    raw[Raw Netflix Prize data] --> pre[preprocess]
+    pre --> train["train · SVD"]
+    train --> evaluate[evaluate]
+    train --> model[("svd_model.pkl")]
+    model --> api["FastAPI /recommend"]
+    api --> dash[Streamlit dashboard]
+    api --> demo["curl / demo.py"]
+    train -.-> mlflow[(MLflow)]
+    evaluate -.-> mlflow
 ```
-.
-├── artifacts/            # Output directory for processed data artifacts (e.g., valid users/movies lists)
-│   ├── valid_movies.pkl  
-│   └── valid_users.pkl   
-├── config/               # Configuration files and settings for the project
-│   ├── best_params.yaml  
-│   ├── paths.py          
-│   └── settings.yaml     
-├── data/                 # Raw, processed, and final datasets
-│   ├── final/            
-│   ├── processed/        
-│   └── raw/              
-├── mlruns/               # MLflow tracking directory for experiment logs and metrics
-├── models/               # Saved trained models
-│   └── svd_model.pkl     
-├── notebooks/            # Jupyter notebooks for EDA, modeling, prediction, and preprocessing
-│   ├── eda.ipynb
-│   ├── model.ipynb
-│   ├── predict.ipynb
-│   └── preprocessing.ipynb
-├── src/                  # Source code: main scripts for preprocessing, training, and prediction
-│   ├── ncf_model.py              
-│   ├── predictions.py
-│   ├── preprocessing.py
-│   ├── svd_model.py
-│   └── training.py
-├── utils/                # Utility modules for config, data handling, splitting, file ops, and metrics
-│   ├── __init__.py
-│   ├── config_loader.py
-│   ├── data_processing.py
-│   ├── data_split.py
-│   ├── files_management.py
-│   ├── metrics.py
-│   └── pytorch_utils.py
-├── dvc.yaml              # DVC pipeline definition for reproducible data versioning and pipeline stages
-├── Dockerfile            # Dockerfile to build containerized environment with dependencies and DVC setup
-├── requirements.txt      # Python pip dependencies
-└── environment.yaml      # Conda environment file (used for local development and Docker image)
+The four-stage **DVC pipeline** turns raw ratings into a fitted model; the **serving**
+layer loads that model once and answers recommendations over HTTP. MLflow tracks each
+training/evaluation run.
 
+---
+
+## Key decisions
+- **SVD over NCF / SVD++.** A PyTorch NCF was tried first; its MLP added only ~1.3% on
+  warm users, and SVD++ overfits under a temporal split (its implicit-feedback term
+  assumes the test items sit in the user's history, but they are in the future). Plain
+  Funk SVD won on simplicity for the same test error.
+- **Temporal split, reported warm vs cold.** Ratings are split by date (train on the
+  past, predict the future) to avoid a random split's leakage. That creates *cold* users
+  whose error is a fixed popularity floor — so every metric is reported overall **and**
+  warm-only, and warm is the number worth optimizing.
+- **Online serving is a demonstration, not a need.** For a fixed catalog, batch
+  precompute is the right tool; the FastAPI layer exists to show the online pattern.
+  Stating that plainly is the point.
+
+See [docs/decisions.md](docs/decisions.md) for the full reasoning and numbers.
+
+---
+
+## What's inside
+- **Model** — Funk SVD (`scikit-surprise`): `ŷ = μ + b_u + b_i + qᵢ·pᵤ`, scored vectorized over NumPy. See [docs/model.md](docs/model.md).
+- **Pipeline** — four DVC stages wired in `dvc.yaml`, params sourced from `config/settings.yaml`. See [docs/pipeline.md](docs/pipeline.md).
+- **Serving** — FastAPI (`/recommend/{user_id}`, `/health`) + a Streamlit dashboard that consumes it over HTTP. See [docs/serving.md](docs/serving.md).
+- **Tests** — pytest, focused on the vectorized, bug-prone code. See [docs/testing.md](docs/testing.md).
+- **Tracking** — MLflow runs (params, train/test RMSE).
+- **Containers** — one image; `docker compose up` runs API + dashboard + MLflow.
+
+---
+
+## Quickstart
+
+### 1. Install
+```bash
+make install-dev      # runtime + dev deps (ruff, pytest, pre-commit)
 ```
 
-
-
----
-
-## ⚙️ Pipeline Stages
-
-The DVC pipeline is defined in `dvc.yaml` and includes the following stages:
-
-1. **Preprocessing** – Cleans and transforms the input data.
-2. **Training** – Trains a recommendation system model.
-3. **Prediction** – Uses the trained model to generate predictions.
-
----
-
-## 📊 Results
-
-Both models were trained on a 5% sample of the Netflix Prize dataset and evaluated
-on a temporal hold-out set (most recent 20% of interactions).
-
-| Metric | NCF | SVD |
-|--------|-----|-----|
-| RMSE | 0.9877 | 1.0264 |
-| Precision@10 | 0.1197 | 0.1460 |
-| Recall@10 | 0.9998 | 0.9956 |
-
-> **Threshold:** a movie is considered relevant if its true rating is ≥ 4.0.
-> Experiments tracked with [MLflow](https://mlflow.org/).
-
-### Interpretation
-
-**RMSE** is acceptable for both models — less than 1 star of error on a 1–5 scale.
-NCF edges out SVD slightly (0.99 vs 1.03), suggesting its neural architecture captures
-user-movie interactions more precisely.
-
-**Recall@10 is near-perfect (~1.0) for both models**, meaning almost every movie a user
-would actually enjoy appears somewhere in the top 10. However, this comes at a cost:
-
-**Precision@10 is low (0.12–0.15)**, meaning only 1 or 2 out of every 10 recommended
-movies are actually relevant to the user. The models are being too generous — they
-predict high ratings broadly rather than selectively.
-
-This Recall/Precision imbalance is a known symptom of training on a **small data sample**.
-With only 5% of the dataset, the models see too few interactions per user to learn
-selective preferences, and tend to recommend popular or broadly-liked movies to everyone.
-
-### Potential Improvements
-
-- **Train on the full dataset** — the most impactful change. Using 100% of the data
-  instead of 5% would give the models enough signal to learn user-specific preferences
-  and improve Precision significantly.
-- **Tune the recommendation threshold** — currently set at 4.0. Raising it to 4.5
-  would make the definition of "relevant" stricter, likely improving Precision at the
-  cost of some Recall.
-- **Hyperparameter optimization for NCF** — SVD uses Optuna for tuning, but NCF
-  hyperparameters are currently fixed. Applying the same optimization strategy to NCF
-  embedding size, learning rate, and regularization could improve its performance.
-- **Increase NCF model capacity** — the current MLP architecture (64→32→1) is relatively
-  shallow. Deeper layers or larger embeddings could capture more complex patterns.
-
-
-## 📋 Requirements
-/
-* Docker
-* Git
-* A Kaggle account to download the dataset
-No need to install Python or DVC locally — everything runs inside Docker
-
----
-
-## 📥 Data Setup
-This project uses the Netflix Prize dataset from Kaggle. The raw data files are not included in this repository and must be downloaded manually.
-Steps:
-
-Go to the dataset page on Kaggle and download the files.
-Place the following files inside data/raw/:
-
+### 2. Get the data
+Download the [Netflix Prize dataset](https://www.kaggle.com/datasets/netflix-inc/netflix-prize-data)
+from Kaggle and place the files under `data/raw/`:
+```
 data/raw/
 ├── combined_data_1.txt
 ├── combined_data_2.txt
@@ -141,88 +83,85 @@ data/raw/
 ├── combined_data_4.txt
 ├── movie_titles.csv
 └── qualifying.txt
+```
+`config/settings.yaml` uses all four files (`num_raw_files: 4`); set it to `1` for a quick subset.
 
-The pipeline is configured to use only combined_data_1.txt by default (num_raw_files: 1 in settings.yaml). Set it to 4 to use the full dataset.
+### 3. Run the pipeline
+```bash
+make pipeline         # preprocess -> train -> evaluate -> recommend
+# or, with caching + versioning:
+dvc repro
+```
+
+### 4. Serve it
+```bash
+make up               # docker compose: API + dashboard + MLflow
+```
+- API / Swagger → http://localhost:8000/docs
+- Dashboard → http://localhost:8501
+- MLflow UI → http://localhost:5001
+
+Or run locally without Docker, in two terminals: `make serve` and `make dashboard`.
 
 ---
 
-## 🚀 Getting Started
-
-### 1. Build the Docker Image
-
-```bash
-docker build -t netflix-pipeline .
+## Project structure
 ```
-
-> This creates a reproducible environment with Python, DVC, and all necessary dependencies.
-
-### 2. Run the Pipeline
-
-Run the full pipeline from the root of the project directory:
-
-```bash
-docker run --rm -v $(pwd):/app netflix-pipeline
-```
-
-This command executes `dvc repro` inside the container, automatically running the pipeline stages as needed.
-
-> **Note:** The project must be a Git repository for DVC to work correctly.
-
----
-
-## 🧪 Run Individual Scripts (Optional)
-
-You can also manually run individual pipeline stages inside the container:
-
-```bash
-# Preprocessing
-docker run --rm -v $(pwd):/app netflix-pipeline python -m src.preprocessing
-
-# Training
-docker run --rm -v $(pwd):/app netflix-pipeline python -m src.training
-
-# Prediction
-docker run --rm -v $(pwd):/app netflix-pipeline python -m src.predictions
+.
+├── src/                 # pipeline stages: preprocessing · train · evaluate · recommend · model
+├── app/                 # api.py (FastAPI) · dashboard.py (Streamlit)
+├── examples/            # demo.py — example API client
+├── tests/               # pytest suite (conftest + per-module tests)
+├── config/              # settings.yaml (all config) · paths.py
+├── docs/                # focused per-topic docs (start at docs/README.md)
+├── data/ models/ artifacts/ outputs/   # DVC-tracked, not in git
+├── dvc.yaml             # the 4-stage pipeline DAG
+├── Dockerfile  docker-compose.yml       # serving image + api/dashboard/mlflow stack
+├── Makefile             # common tasks — run `make help`
+└── ROADMAP.md
 ```
 
 ---
 
-## 📁 Volumes & Data Persistence
+## Results
+Trained on a 10% user sample, evaluated on a temporal hold-out (the newest 20% of ratings):
 
-To preserve data and artifacts between runs, mount the entire project directory using:
+| Metric | Overall | Warm users |
+|--------|---------|------------|
+| RMSE | 0.9958 | 0.9277 |
+| Precision@10 | 0.4275 | 0.3957 |
+| Recall@10 | 0.5662 | 0.6390 |
 
+**Baselines for context.** The popularity-only fallback (what cold users get) scores
+RMSE 1.0791, so personalization buys ~0.15 RMSE on warm users. For external orientation
+only — different split and sample, *not* directly comparable — Netflix's Cinematch scored
+≈0.951 and the 2009 grand prize ≈0.857 on their fixed quiz set.
+
+~57% of the ~1.99M test rows are warm. The temporal split (train on the past, predict
+the future) sorts test users into two groups:
+
+- **Warm** — seen during training, so they have a learned factor vector and get a
+  personalized prediction.
+- **Cold** — first appear after the cut-off date, so the model has no history for them
+  and falls back to popularity (an error floor no model can beat).
+
+That is why every metric is reported overall **and** warm-only — warm is the number
+worth optimizing. The full reading (the relevance threshold behind Precision/Recall@10,
+why RMSE and ranking diverge) is in **[docs/evaluation.md](docs/evaluation.md)**; the
+modelling decisions (NCF vs SVD vs SVD++, the overfitting analysis) in
+**[docs/decisions.md](docs/decisions.md)**.
+
+---
+
+## Development
 ```bash
--v $(pwd):/app
+make test             # run the pytest suite
+make lint             # ruff (no changes)
+make format           # ruff format + autofix
 ```
-
-Alternatively, you can mount folders individually (less recommended):
-
-```bash
-docker run --rm \
-  -v $(pwd)/data:/app/data \
-  -v $(pwd)/models:/app/models \
-  -v $(pwd)/artifacts:/app/artifacts \
-  netflix-pipeline
-```
+`pre-commit` runs the linter on commit (`make install-dev` registers the hooks).
 
 ---
 
-## 📋 Requirements
-
-- [Docker](https://www.docker.com/)
-- [Git](https://git-scm.com/)
-- No need to install Python or DVC locally — everything runs inside Docker
-
----
-
-## ✅ Tips
-
-- Use Git to version control your code and data.
-- Use `dvc repro` to re-run the pipeline after modifying code or inputs.
-- All stages and file dependencies are tracked in `dvc.yaml`.
-
----
-
-## 📄 License
-
-MIT License. See `LICENSE` file for details.
+## License
+MIT — see [LICENSE](LICENSE).
