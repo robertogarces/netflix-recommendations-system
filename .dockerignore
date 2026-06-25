@@ -1,0 +1,26 @@
+# Keep the build context tiny: the big artifacts are mounted at runtime, not baked.
+.git
+.dvc/cache
+.dvc/tmp
+data/
+models/
+artifacts/
+outputs/
+mlruns/
+
+# Not needed in the serving image.
+notebooks/
+tests/
+examples/
+docs/
+
+# Caches / local cruft.
+**/__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.venv/
+venv/
+.env
+*.log
+.DS_Store
