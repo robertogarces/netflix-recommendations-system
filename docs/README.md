@@ -13,6 +13,7 @@ each user's top movies.
 | [recommendation.md](recommendation.md) | Serving: the two modes, qualifying users, seen-item filtering, output |
 | [decisions.md](decisions.md) | Why this stack: the NCF / SVD / SVD++ comparison and the overfitting analysis |
 | [testing.md](testing.md) | The test suite: how to run it, the oracle approach, and what each test pins |
+| [serving.md](serving.md) | The serving API: endpoints, how to run it, usage examples, and why online vs batch |
 
 Code lives in `src/` (one module per stage) plus `app/dashboard.py`. All
 configuration is centralized in `config/settings.yaml`; file paths in `config/paths.py`.
