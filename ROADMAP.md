@@ -94,6 +94,13 @@ reproducibility, tests, versioning, serving, containers, and docs.
 - Compare personalized recommendations vs. the popularity baseline.
 - (Metrics panel + per-user rating history already exist.)
 
+## Future features (deferred)
+- **Item-item similarity endpoint** (`GET /movies/{id}/similar`) — "more like this"
+  via cosine of the learned `q_i` factors. (Was "D5"; deferred to a later pass.)
+- **Collapse series by season** — recommend "The Sopranos" once, not "Season 1 / 2 /
+  3" as separate items. Needs grouping seasons of the same show (title parsing or a
+  mapping) before ranking.
+
 ## Open decisions
 
 - **`relevance_threshold = 4.5`** with integer ratings means only 5★ count as
