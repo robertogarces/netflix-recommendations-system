@@ -10,6 +10,8 @@ extra dependencies; point it elsewhere with API_URL=http://host:port.
 
 import json
 import os
+import sys
+import urllib.error
 import urllib.request
 
 BASE_URL = os.environ.get("API_URL", "http://localhost:8000")
@@ -30,10 +32,13 @@ def show(label: str, user_id: int, k: int = 5) -> None:
 
 
 def main() -> None:
-    health = get("/health")
-    print(f"API up — model knows {health['n_users']:,} users, {health['n_items']:,} movies")
-    show("Personalized (warm)", WARM_USER)
-    show("Cold start (unknown user)", COLD_USER)
+    try:
+        health = get("/health")
+        print(f"API up — model knows {health['n_users']:,} users, {health['n_items']:,} movies")
+        show("Personalized (warm)", WARM_USER)
+        show("Cold start (unknown user)", COLD_USER)
+    except urllib.error.URLError as exc:
+        sys.exit(f"Cannot reach the API at {BASE_URL} — start it with `make serve`. ({exc.reason})")
 
 
 if __name__ == "__main__":
