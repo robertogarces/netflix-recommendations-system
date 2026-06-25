@@ -1,0 +1,42 @@
+# One `docker compose up` brings up the API, the dashboard and the MLflow UI.
+# All three reuse the same image (built from ./Dockerfile); they differ only by
+# command. The big artifacts (model, data, runs) are mounted, not baked.
+
+services:
+  api:
+    build: .
+    image: netflix-recommender:latest
+    command: uvicorn app.api:app --host 0.0.0.0 --port 8000
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./models:/app/models:ro
+      - ./data:/app/data:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  dashboard:
+    image: netflix-recommender:latest
+    command: streamlit run app/dashboard.py --server.address 0.0.0.0 --server.port 8501 --server.headless true
+    environment:
+      - API_URL=http://api:8000
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./data:/app/data:ro
+      - ./outputs:/app/outputs:ro
+    depends_on:
+      api:
+        condition: service_healthy
+
+  mlflow:
+    image: netflix-recommender:latest
+    command: mlflow ui --host 0.0.0.0 --port 5000 --backend-store-uri file:///app/mlruns
+    ports:
+      - "5001:5000"   # host 5001 -> container 5000 (macOS AirPlay Receiver owns 5000)
+    volumes:
+      - ./mlruns:/app/mlruns

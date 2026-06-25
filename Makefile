@@ -41,6 +41,14 @@ serve:  ## Serve the recommendation API (FastAPI + uvicorn)
 dashboard:  ## Launch the Streamlit dashboard
 	streamlit run app/dashboard.py
 
+# --- Docker ---
+.PHONY: up down
+up:  ## Start the full stack (API + dashboard + MLflow) via docker compose
+	docker compose up --build
+
+down:  ## Stop and remove the docker compose stack
+	docker compose down
+
 # --- Quality ---
 .PHONY: lint format test
 lint:  ## Lint with ruff (no file changes)
