@@ -17,6 +17,8 @@ and MLflow tracking.
 📖 Deep documentation lives in **[docs/](docs/README.md)** (one focused doc per topic).
 The forward-looking plan is in **[ROADMAP.md](ROADMAP.md)**.
 
+![Streamlit dashboard](docs/images/dashboard.png)
+
 ---
 
 ## Architecture
