@@ -5,16 +5,21 @@ Single page with two sections:
 - User Explorer:     type a customer_id -> live top-K recommendations, warm/cold
                      status, and the user's own rating history for context.
 
-Live scoring reuses src.recommend -- the dashboard is just another wrapper over
-the same core, exactly like the CLI and a future API would be.
+Recommendations come from the serving API over HTTP (app/api.py), so the dashboard
+is a thin presentation client and the model is owned by a single service. Point it
+elsewhere with API_URL=http://host:port. Metrics and rating history are still read
+from disk (no API endpoint for those yet).
 
-Run:  streamlit run app/dashboard.py
+Run:  make serve        # the API, in one terminal
+      make dashboard    # this dashboard, in another
 """
 
 import json
+import os
 import sys
 from pathlib import Path
 
+import httpx
 import pandas as pd
 import polars as pl
 import streamlit as st
@@ -24,20 +29,13 @@ import yaml
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from config.paths import PROCESSED_DATA_PATH, MODELS_PATH, OUTPUTS_PATH, CONFIG_PATH
-from src.model import load_model as load_svd_model, item_raw_ids
-from src.recommend import recommend_single_user, load_movie_titles
+from config.paths import CONFIG_PATH, OUTPUTS_PATH, PROCESSED_DATA_PATH
+from src.recommend import load_movie_titles
+
+API_URL = os.environ.get("API_URL", "http://localhost:8000")
+SAMPLE_USER = 1488844  # a warm user, for a meaningful default view
 
 st.set_page_config(page_title="Netflix SVD Recommender", page_icon="\U0001f3ac", layout="wide")
-
-
-@st.cache_resource
-def load_model():
-    algo = load_svd_model(MODELS_PATH / "svd_model.pkl")
-    titles = load_movie_titles()
-    idx2raw = item_raw_ids(algo)                       # cached: inner item idx -> movie_id
-    sample_warm_user = min(algo.trainset._raw2inner_id_users)  # default view is personalized
-    return algo, titles, idx2raw, sample_warm_user
 
 
 @st.cache_data
@@ -68,21 +66,28 @@ def get_user_history(user_id: int) -> pd.DataFrame:
     return hist
 
 
+def fetch_health() -> dict:
+    return httpx.get(f"{API_URL}/health", timeout=10).json()
+
+
+def fetch_recommendations(user_id: int, k: int) -> dict:
+    resp = httpx.get(f"{API_URL}/recommend/{user_id}", params={"k": k}, timeout=30)
+    resp.raise_for_status()
+    return resp.json()
+
+
 # --- Shared resources ---
-config       = load_config_cached()
+config = load_config_cached()
+k_default = config["recommend"]["top_k"]
 
 try:
-    algo, titles, idx2raw, sample_warm_user = load_model()
-except FileNotFoundError:
-    st.error("No model at models/svd_model.pkl. Run `python -m src.train` first.")
+    health = fetch_health()
+except httpx.HTTPError:
+    st.error(f"Recommendation API not reachable at {API_URL}. Start it with `make serve`.")
     st.stop()
 
-k_default    = config["recommend"]["top_k"]
-rating_scale = tuple(config["data"]["rating_scale"])
-ts = algo.trainset
-
 st.title("\U0001f3ac Netflix Recommender — SVD Matrix Factorization (Surprise)")
-st.caption(f"Model knows {ts.n_users:,} users and {ts.n_items:,} movies")
+st.caption(f"Model knows {health['n_users']:,} users and {health['n_items']:,} movies")
 
 # --- Model Performance ---
 st.subheader("\U0001f4ca Model Performance")
@@ -107,14 +112,19 @@ st.divider()
 st.subheader("\U0001f50d User Explorer")
 col_id, col_k = st.columns([3, 1])
 user_id = col_id.number_input(
-    "Customer ID", min_value=1, value=int(sample_warm_user), step=1,
+    "Customer ID", min_value=1, value=SAMPLE_USER, step=1,
     help="A warm user was seen in training; an unknown user gets the cold-start fallback.",
 )
 k = col_k.number_input("How many", min_value=1, max_value=50, value=k_default, step=1)
 
-recs, segment = recommend_single_user(
-    algo, int(user_id), int(k), rating_scale, titles=titles, idx2raw=idx2raw
-)
+try:
+    rec = fetch_recommendations(int(user_id), int(k))
+except httpx.HTTPError as exc:
+    st.error(f"API error fetching recommendations: {exc}")
+    st.stop()
+
+segment = rec["segment"]
+recs = pd.DataFrame(rec["items"])
 
 if segment == "warm":
     st.success("**Warm user** — personalized from the user's learned factor vector.")
@@ -129,7 +139,7 @@ history_caption = f"{len(history):,} ratings · showing highest-rated" if not hi
 left, right = st.columns(2)
 with left:
     st.markdown(f"**Top-{int(k)} recommendations**")
-    st.caption(f"{int(k)} personalized results")
+    st.caption(f"{int(k)} results from the API")
     st.dataframe(recs[["rank", "title", "score"]], hide_index=True, width="stretch")
 with right:
     st.markdown("**User's rating history**")

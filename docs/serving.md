@@ -37,6 +37,18 @@ curl "localhost:8000/recommend/999999999?k=5"   # unknown -> cold (popularity)
 
 ---
 
+## Clients
+Two things consume the API:
+- **`examples/demo.py`** — a zero-dependency example client that prints a warm vs
+  cold user side by side.
+- **The Streamlit dashboard** (`app/dashboard.py`, `make dashboard`) — sends the
+  `customer_id` you type to `/recommend` and renders the response. The model is owned
+  only by the API; the dashboard is a thin presentation client. (Its Model Performance
+  and rating-history panels still read from disk — there is no API endpoint for those
+  yet, so the decoupling is partial.)
+
+---
+
 ## Why an API for a fixed dataset? (honest framing)
 For a *static* catalog with a closed user set, **batch precompute is the correct
 engineering choice** — and the pipeline already produces it
