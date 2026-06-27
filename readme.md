@@ -1,3 +1,4 @@
+![CI](https://github.com/robertogarces/netflix-recommendations-system/actions/workflows/ci.yml/badge.svg)
 ![Python](https://img.shields.io/badge/Python-3.10-blue?logo=python&logoColor=white)
 ![Surprise](https://img.shields.io/badge/Surprise-SVD-f7931e)
 ![DVC](https://img.shields.io/badge/DVC-pipeline-945DD6?logo=dvc&logoColor=white)
