@@ -13,6 +13,7 @@ from typing import Literal
 
 import yaml
 from fastapi import FastAPI, Query
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 
 from config.paths import CONFIG_PATH, MODELS_PATH
@@ -57,6 +58,12 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Netflix SVD Recommender", version="0.1.0", lifespan=lifespan)
+
+
+@app.get("/", include_in_schema=False)
+def root() -> RedirectResponse:
+    """Send the bare root to the interactive API docs."""
+    return RedirectResponse(url="/docs")
 
 
 @app.get("/health", response_model=HealthResponse)
